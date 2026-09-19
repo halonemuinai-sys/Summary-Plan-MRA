@@ -3,15 +3,14 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  UploadCloud, Save, PlusCircle, ExternalLink, Copy, Check,
-  RefreshCw, FileSpreadsheet, Lock, Edit3, ArrowRight, Database,
+  Save, PlusCircle, ExternalLink, Copy, Check,
+  FileSpreadsheet, Lock, Edit3, ArrowRight, Database,
   Sparkles, CheckCircle2
 } from 'lucide-react';
 import { ScenarioDataset, FinancialRowData } from '@/lib/types';
 import { INITIAL_DATASET } from '@/lib/initial-data';
 import { recalculateFinancials } from '@/lib/formula-engine';
 import confetti from 'canvas-confetti';
-import * as XLSX from 'xlsx';
 
 export default function AdminPage() {
   const router = useRouter();
@@ -23,7 +22,6 @@ export default function AdminPage() {
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [scenariosList, setScenariosList] = useState<ScenarioDataset[]>([INITIAL_DATASET]);
-  const [uploadStatus, setUploadStatus] = useState<string | null>(null);
   const [highlightedRow, setHighlightedRow] = useState<string | null>(null);
   const [origin, setOrigin] = useState('');
 
@@ -155,33 +153,6 @@ export default function AdminPage() {
     }
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setUploadStatus('Processing Excel file...');
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-      try {
-        const bstr = evt.target?.result;
-        const wb = XLSX.read(bstr, { type: 'binary' });
-
-        const targetSheet = 'PL MRA Group+Holding (Combine)';
-        if (!wb.SheetNames.includes(targetSheet)) {
-          alert(`Sheet "${targetSheet}" not found in uploaded workbook!`);
-          setUploadStatus(null);
-          return;
-        }
-
-        setUploadStatus(`Sheet "${targetSheet}" recognized! Syncing with PostgreSQL...`);
-      } catch (err) {
-        console.error('Error reading excel:', err);
-        setUploadStatus('Failed to read Excel workbook.');
-      }
-    };
-    reader.readAsBinaryString(file);
-  };
-
   const presentationUrl = origin ? `${origin}/p/${activeScenarioSlug}` : `/p/${activeScenarioSlug}`;
 
   return (
@@ -219,37 +190,8 @@ export default function AdminPage() {
 
       <div className="flex-1 p-6 max-w-7xl mx-auto w-full space-y-6">
 
-        {/* Action Panel: 3 Executive Cards */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-
-          {/* 1. Database & Excel Sync */}
-          <div className="bg-[#101726]/90 border border-slate-800/90 rounded-2xl p-5 flex flex-col justify-between shadow-xl backdrop-blur-sm">
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <h2 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                  <Database className="w-4 h-4 text-emerald-400" />
-                  PostgreSQL Data Source
-                </h2>
-                <span className="text-[10px] font-semibold text-emerald-400 bg-emerald-950/60 border border-emerald-800/60 px-2 py-0.5 rounded">
-                  Connected
-                </span>
-              </div>
-              <p className="text-xs text-slate-400 mb-3">
-                All scenarios are saved in PostgreSQL (<code className="text-blue-300">mra_summary_plan</code>). No Excel upload needed for day-to-day edits.
-              </p>
-              <label className="border-2 border-dashed border-slate-700/80 hover:border-blue-500 rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer transition-colors bg-slate-900/40 group">
-                <UploadCloud className="w-5 h-5 text-slate-400 group-hover:text-blue-400 mb-1 transition-colors" />
-                <span className="text-xs font-semibold text-slate-300">Optional: Overwrite via Excel</span>
-                <span className="text-[10px] text-slate-500">Auto-syncs sheet 'PL MRA Group+Holding'</span>
-                <input type="file" accept=".xlsx,.xls" onChange={handleFileUpload} className="hidden" />
-              </label>
-            </div>
-            {uploadStatus && (
-              <div className="mt-2 text-xs text-emerald-400 bg-emerald-950/50 border border-emerald-800/60 p-2 rounded-lg">
-                {uploadStatus}
-              </div>
-            )}
-          </div>
+        {/* Action Panel: 2 Executive Cards (Clean 2-Column Grid) */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
 
           {/* 2. Active Scenario Settings */}
           <div className="bg-[#101726]/90 border border-slate-800/90 rounded-2xl p-5 flex flex-col justify-between shadow-xl backdrop-blur-sm">
