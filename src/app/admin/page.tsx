@@ -25,13 +25,17 @@ export default function AdminPage() {
   const [scenariosList, setScenariosList] = useState<ScenarioDataset[]>([INITIAL_DATASET]);
   const [uploadStatus, setUploadStatus] = useState<string | null>(null);
   const [highlightedRow, setHighlightedRow] = useState<string | null>(null);
+  const [origin, setOrigin] = useState('');
 
   // Focus years for business plan (2024 to 2031)
   const displayYears = dataset.years.filter(y => parseInt(y) >= 2024);
 
-  // Load scenarios from PostgreSQL on mount
+  // Load scenarios from PostgreSQL on mount & set origin safely
   useEffect(() => {
     fetchScenarios();
+    if (typeof window !== 'undefined') {
+      setOrigin(window.location.origin);
+    }
   }, []);
 
   const fetchScenarios = async () => {
@@ -178,7 +182,7 @@ export default function AdminPage() {
     reader.readAsBinaryString(file);
   };
 
-  const presentationUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/p/${activeScenarioSlug}`;
+  const presentationUrl = origin ? `${origin}/p/${activeScenarioSlug}` : `/p/${activeScenarioSlug}`;
 
   return (
     <div className="min-h-screen bg-[#070B14] text-slate-100 flex flex-col selection:bg-blue-600 selection:text-white">
@@ -351,7 +355,10 @@ export default function AdminPage() {
         <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-3.5 flex flex-wrap items-center justify-between gap-3 shadow-lg">
           <div className="flex items-center gap-2.5">
             <span className="text-xs text-slate-400 font-medium">Live Presentation URL:</span>
-            <span className="text-xs font-mono text-blue-400 font-semibold bg-slate-950 px-3 py-1 rounded-lg border border-slate-800">
+            <span 
+              suppressHydrationWarning 
+              className="text-xs font-mono text-blue-400 font-semibold bg-slate-950 px-3 py-1 rounded-lg border border-slate-800"
+            >
               {presentationUrl}
             </span>
           </div>
