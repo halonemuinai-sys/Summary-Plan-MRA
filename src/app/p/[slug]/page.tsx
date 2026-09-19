@@ -9,10 +9,11 @@ import {
 } from 'recharts';
 import {
   Maximize2, Minimize2, ArrowLeft, Share2,
-  Check, RefreshCw, Sun, Moon, TrendingUp, DollarSign, Layers, Compass
+  Check, RefreshCw, Sun, Moon, TrendingUp, DollarSign, Layers, Compass,
+  Building2, X, ExternalLink
 } from 'lucide-react';
-import { ScenarioDataset } from '@/lib/types';
-import { INITIAL_DATASET } from '@/lib/initial-data';
+import { ScenarioDataset, BrandRowData } from '@/lib/types';
+import { INITIAL_DATASET, INITIAL_BRAND_BREAKDOWN } from '@/lib/initial-data';
 import { buildChartData } from '@/lib/formula-engine';
 
 export default function PresentationPage() {
@@ -103,6 +104,39 @@ export default function PresentationPage() {
     setIsCopied(true);
     setTimeout(() => setIsCopied(false), 2500);
   };
+
+  const [q3View, setQ3View] = useState<'cost' | 'brand'>('cost');
+  const [showBrandModal, setShowBrandModal] = useState(false);
+  const [brandViewMode, setBrandViewMode] = useState<'bn' | 'full' | 'growth'>('bn');
+
+  const brandsList: BrandRowData[] =
+    dataset.brandBreakdown && dataset.brandBreakdown.length > 0
+      ? dataset.brandBreakdown
+      : INITIAL_BRAND_BREAKDOWN;
+
+  const brandYears = ['2026', '2027', '2028', '2029', '2030', '2031'];
+
+  const brandChartData = brandYears.map((yr) => {
+    const pt: Record<string, any> = { year: yr };
+    const bulgari = brandsList.find((b) => b.name === 'Bulgari')?.valuesBn[yr] || 0;
+    const haagen = brandsList.find((b) => b.name === 'Haagendazs')?.valuesBn[yr] || 0;
+    const lululemon = brandsList.find((b) => b.name === 'Lulu Lemon')?.valuesBn[yr] || 0;
+    const invincible = brandsList.find((b) => b.name === 'Invicible')?.valuesBn[yr] || 0;
+    const omega = brandsList.find((b) => b.name === 'Omega')?.valuesBn[yr] || 0;
+    const media = brandsList.find((b) => b.name === 'MRA Media - Publisher')?.valuesBn[yr] || 0;
+    const total = brandsList.find((b) => b.category === 'total')?.valuesBn[yr] || 0;
+    const others = Math.max(0, total - (bulgari + haagen + lululemon + invincible + omega + media));
+
+    pt['Bulgari'] = bulgari;
+    pt['Haagendazs'] = haagen;
+    pt['Lulu Lemon'] = lululemon;
+    pt['Invincible'] = invincible;
+    pt['Omega'] = omega;
+    pt['Media'] = media;
+    pt['Others'] = Number(others.toFixed(1));
+    pt['Total'] = total;
+    return pt;
+  });
 
   const bgClass = isLightMode ? 'bg-[#F8FAFC] text-slate-900' : 'bg-[#070B14] text-slate-100';
   const cardClass = isLightMode 
@@ -394,7 +428,7 @@ export default function PresentationPage() {
               </motion.div>
             )}
 
-            {/* QUADRANT 3: COST STRUCTURE COMPOSITION */}
+            {/* QUADRANT 3: COST STRUCTURE COMPOSITION OR BRAND PORTFOLIO */}
             {(zoomedQuadrant === null || zoomedQuadrant === 3) && (
               <motion.div
                 layout
@@ -414,43 +448,105 @@ export default function PresentationPage() {
                         Quadrant 3
                       </span>
                       <h3 className="text-sm font-bold tracking-tight">
-                        Cost Structure Evolution (COGS vs OPEX vs Margin)
+                        {q3View === 'cost' ? 'Cost Structure Evolution (COGS vs OPEX vs Margin)' : 'Brand Portfolio Trajectory (2026–2031)'}
                       </h3>
                     </div>
                   </div>
-                  <button
-                    onClick={() => setZoomedQuadrant(zoomedQuadrant === 3 ? null : 3)}
-                    className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-slate-300 transition-all hover:scale-105"
-                    title={zoomedQuadrant === 3 ? "Restore 4-Quadrant View (Esc)" : "Zoom Quadrant 3"}
-                  >
-                    {zoomedQuadrant === 3 ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-                  </button>
+
+                  <div className="flex items-center gap-2">
+                    {/* View Switcher */}
+                    <div className={`flex rounded-lg border p-0.5 ${isLightMode ? 'bg-slate-100 border-slate-300' : 'bg-slate-900 border-slate-700'}`}>
+                      <button
+                        onClick={() => setQ3View('cost')}
+                        className={`px-2 py-0.5 rounded text-[11px] font-semibold transition-all ${
+                          q3View === 'cost'
+                            ? 'bg-blue-600 text-white shadow'
+                            : 'text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        Cost %
+                      </button>
+                      <button
+                        onClick={() => setQ3View('brand')}
+                        className={`px-2 py-0.5 rounded text-[11px] font-semibold transition-all ${
+                          q3View === 'brand'
+                            ? 'bg-blue-600 text-white shadow'
+                            : 'text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        Brands
+                      </button>
+                    </div>
+
+                    {/* Drilldown Modal Button */}
+                    <button
+                      onClick={() => setShowBrandModal(true)}
+                      className="flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-lg bg-blue-600/10 hover:bg-blue-600/20 text-blue-500 border border-blue-500/30 transition-all"
+                      title="Open 15 Brands Matrix"
+                    >
+                      <Building2 className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">15 Brands Matrix</span>
+                    </button>
+
+                    <button
+                      onClick={() => setZoomedQuadrant(zoomedQuadrant === 3 ? null : 3)}
+                      className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-slate-300 transition-all hover:scale-105"
+                      title={zoomedQuadrant === 3 ? "Restore 4-Quadrant View (Esc)" : "Zoom Quadrant 3"}
+                    >
+                      {zoomedQuadrant === 3 ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+                    </button>
+                  </div>
                 </div>
 
                 <div className="flex-1 min-h-[220px]">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={chartData} stackOffset="expand">
-                      <CartesianGrid strokeDasharray="3 3" stroke={isLightMode ? "#E2E8F0" : "#1E293B"} vertical={false} />
-                      <XAxis dataKey="year" stroke={isLightMode ? "#64748B" : "#94A3B8"} fontSize={11} />
-                      <YAxis
-                        stroke={isLightMode ? "#64748B" : "#94A3B8"}
-                        fontSize={11}
-                        tickFormatter={(val) => `${Math.round(val * 100)}%`}
-                      />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: isLightMode ? '#FFFFFF' : '#0F172A',
-                          borderColor: isLightMode ? '#CBD5E1' : '#334155',
-                          borderRadius: 10,
-                          fontSize: 12,
-                        }}
-                        formatter={(val: any, name: any) => [`${val} IDRbn`, name]}
-                      />
-                      <Legend wrapperStyle={{ fontSize: 11 }} />
-                      <Bar dataKey="cogs" name="COGS / HPP" stackId="a" fill="#F43F5E" />
-                      <Bar dataKey="opex" name="Total OPEX" stackId="a" fill="#FB923C" />
-                      <Bar dataKey="npat" name="Net Profit Margin" stackId="a" fill="#10B981" />
-                    </BarChart>
+                    {q3View === 'cost' ? (
+                      <BarChart data={chartData} stackOffset="expand">
+                        <CartesianGrid strokeDasharray="3 3" stroke={isLightMode ? "#E2E8F0" : "#1E293B"} vertical={false} />
+                        <XAxis dataKey="year" stroke={isLightMode ? "#64748B" : "#94A3B8"} fontSize={11} />
+                        <YAxis
+                          stroke={isLightMode ? "#64748B" : "#94A3B8"}
+                          fontSize={11}
+                          tickFormatter={(val) => `${Math.round(val * 100)}%`}
+                        />
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: isLightMode ? '#FFFFFF' : '#0F172A',
+                            borderColor: isLightMode ? '#CBD5E1' : '#334155',
+                            borderRadius: 10,
+                            fontSize: 12,
+                          }}
+                          formatter={(val: any, name: any) => [`${val} IDRbn`, name]}
+                        />
+                        <Legend wrapperStyle={{ fontSize: 11 }} />
+                        <Bar dataKey="cogs" name="COGS / HPP" stackId="a" fill="#F43F5E" />
+                        <Bar dataKey="opex" name="Total OPEX" stackId="a" fill="#FB923C" />
+                        <Bar dataKey="npat" name="Net Profit Margin" stackId="a" fill="#10B981" />
+                      </BarChart>
+                    ) : (
+                      <BarChart data={brandChartData}>
+                        <CartesianGrid strokeDasharray="3 3" stroke={isLightMode ? "#E2E8F0" : "#1E293B"} vertical={false} />
+                        <XAxis dataKey="year" stroke={isLightMode ? "#64748B" : "#94A3B8"} fontSize={11} />
+                        <YAxis stroke={isLightMode ? "#64748B" : "#94A3B8"} fontSize={11} />
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: isLightMode ? '#FFFFFF' : '#0F172A',
+                            borderColor: isLightMode ? '#CBD5E1' : '#334155',
+                            borderRadius: 10,
+                            fontSize: 12,
+                          }}
+                          formatter={(val: any, name: any) => [`${val} IDRbn`, name]}
+                        />
+                        <Legend wrapperStyle={{ fontSize: 11 }} />
+                        <Bar dataKey="Bulgari" stackId="a" fill="#3B82F6" />
+                        <Bar dataKey="Haagendazs" stackId="a" fill="#F97316" />
+                        <Bar dataKey="Lulu Lemon" stackId="a" fill="#A855F7" />
+                        <Bar dataKey="Invincible" stackId="a" fill="#10B981" />
+                        <Bar dataKey="Omega" stackId="a" fill="#6366F1" />
+                        <Bar dataKey="Media" stackId="a" fill="#EC4899" />
+                        <Bar dataKey="Others" stackId="a" fill="#64748B" />
+                      </BarChart>
+                    )}
                   </ResponsiveContainer>
                 </div>
               </motion.div>
@@ -551,6 +647,128 @@ export default function PresentationPage() {
           MRA Corporate Planning & Finance &copy; 2026. Confidential Presentation.
         </div>
       </footer>
+
+      {/* 15 Brands Breakdown Modal */}
+      {showBrandModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className={`w-full max-w-5xl max-h-[85vh] rounded-2xl border p-6 flex flex-col shadow-2xl ${cardClass} overflow-hidden`}>
+            <div className="flex items-center justify-between pb-4 border-b border-slate-700/60 mb-4">
+              <div>
+                <h3 className={`text-base font-bold flex items-center gap-2 ${isLightMode ? 'text-slate-900' : 'text-white'}`}>
+                  <Building2 className="w-5 h-5 text-blue-500" />
+                  MRA Group Brand Revenue Matrix (2026–2031)
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Extracted directly from sheet: PL MRA Group+Holding (Combine) Rows 97–117
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <div className={`flex rounded-lg border p-0.5 ${isLightMode ? 'bg-slate-100 border-slate-300' : 'bg-slate-900 border-slate-700'}`}>
+                  <button
+                    onClick={() => setBrandViewMode('bn')}
+                    className={`px-2.5 py-1 rounded text-xs font-semibold ${brandViewMode === 'bn' ? 'bg-blue-600 text-white' : 'text-slate-400'}`}
+                  >
+                    IDR Billion
+                  </button>
+                  <button
+                    onClick={() => setBrandViewMode('full')}
+                    className={`px-2.5 py-1 rounded text-xs font-semibold ${brandViewMode === 'full' ? 'bg-blue-600 text-white' : 'text-slate-400'}`}
+                  >
+                    Full Rupiah
+                  </button>
+                  <button
+                    onClick={() => setBrandViewMode('growth')}
+                    className={`px-2.5 py-1 rounded text-xs font-semibold ${brandViewMode === 'growth' ? 'bg-blue-600 text-white' : 'text-slate-400'}`}
+                  >
+                    % YoY Growth
+                  </button>
+                </div>
+
+                <button
+                  onClick={() => setShowBrandModal(false)}
+                  className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-auto rounded-xl border border-slate-700/60">
+              <table className="w-full text-xs text-left border-collapse">
+                <thead className={`sticky top-0 z-20 ${isLightMode ? 'bg-slate-100 text-slate-800' : 'bg-[#162032] text-slate-200'}`}>
+                  <tr>
+                    <th className="py-2.5 px-4 font-semibold border-b border-r w-64">Brand / Business Unit</th>
+                    {brandYears.map((yr) => (
+                      <th key={yr} className="py-2.5 px-3 font-semibold border-b border-r text-right min-w-[110px]">
+                        {yr}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className={`divide-y ${isLightMode ? 'divide-slate-200' : 'divide-slate-800/80'}`}>
+                  {brandsList.map((brand) => {
+                    const isSectionHeader = ['header_fnb', 'header_retail'].includes(brand.category);
+                    const isTotal = brand.category === 'total';
+
+                    if (isSectionHeader) {
+                      return (
+                        <tr key={brand.id} className={isLightMode ? 'bg-slate-200/80' : 'bg-slate-800/80'}>
+                          <td colSpan={brandYears.length + 1} className="py-2 px-4 font-bold text-xs uppercase tracking-wider">
+                            {brand.name}
+                          </td>
+                        </tr>
+                      );
+                    }
+
+                    return (
+                      <tr
+                        key={brand.id}
+                        className={isTotal ? (isLightMode ? 'bg-slate-100 font-bold text-slate-900 border-t-2 border-slate-300' : 'bg-[#141E2E] font-bold text-slate-100 border-t-2 border-slate-700') : (isLightMode ? 'hover:bg-slate-50 text-slate-700' : 'hover:bg-slate-800/40 text-slate-300')}
+                      >
+                        <td className="py-2 px-4 border-r font-medium flex items-center justify-between">
+                          <span className={['fnb_new', 'retail_new'].includes(brand.category) ? 'pl-4' : isTotal ? 'font-black' : ''}>
+                            {brand.name}
+                          </span>
+                        </td>
+                        {brandYears.map((yr) => {
+                          const valBn = brand.valuesBn[yr] ?? 0;
+                          const valIdr = brand.valuesIdr[yr] ?? 0;
+                          const growth = brand.growthPct?.[yr];
+                          return (
+                            <td key={yr} className="py-1.5 px-3 border-r text-right font-mono">
+                              {brandViewMode === 'growth' ? (
+                                growth === null || growth === undefined ? (
+                                  <span className="text-slate-500">-</span>
+                                ) : growth < 0 ? (
+                                  <span className="text-rose-500 font-bold">{growth}%</span>
+                                ) : (
+                                  <span className="text-emerald-500 font-bold">+{growth}%</span>
+                                )
+                              ) : brandViewMode === 'full' ? (
+                                valIdr > 0 ? valIdr.toLocaleString('id-ID') : '-'
+                              ) : (
+                                <span>
+                                  {valBn > 0 ? valBn.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 2 }) : '-'}
+                                  {growth !== undefined && growth !== null && valBn > 0 && (
+                                    <span className="text-[9px] text-emerald-500 ml-1">
+                                      (+{growth}%)
+                                    </span>
+                                  )}
+                                </span>
+                              )}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

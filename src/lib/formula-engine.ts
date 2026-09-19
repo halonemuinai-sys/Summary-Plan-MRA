@@ -1,4 +1,4 @@
-import { FinancialRowData, ChartDataPoint } from './types';
+import { FinancialRowData, ChartDataPoint, BrandRowData } from './types';
 
 /**
  * Recalculates formula-derived rows whenever inputs are changed in the Admin Grid
@@ -126,4 +126,57 @@ export function buildChartData(
       npatMargin
     };
   });
+}
+
+/**
+ * Recalculates brand-level totals and YoY growth percentages whenever brand numbers are edited
+ */
+export function recalculateBrandBreakdown(
+  brands: BrandRowData[],
+  years: string[] = ['2026', '2027', '2028', '2029', '2030', '2031']
+): BrandRowData[] {
+  const updated: BrandRowData[] = JSON.parse(JSON.stringify(brands));
+  const totalRow = updated.find((b) => b.category === 'total');
+
+  for (let i = 0; i < years.length; i++) {
+    const year = years[i];
+    let sumBn = 0;
+    let sumIdr = 0;
+
+    for (const row of updated) {
+      if (['existing', 'fnb_new', 'retail_new'].includes(row.category)) {
+        const valBn = row.valuesBn[year] ?? 0;
+        const valIdr = row.valuesIdr[year] ?? (valBn * 1e9);
+        sumBn += valBn;
+        sumIdr += valIdr;
+
+        // Recalculate YoY growth
+        if (i > 0) {
+          const prevYear = years[i - 1];
+          const prevVal = row.valuesBn[prevYear] ?? 0;
+          row.growthPct = row.growthPct || {};
+          if (prevVal > 0) {
+            row.growthPct[year] = Number((((valBn - prevVal) / prevVal) * 100).toFixed(1));
+          } else {
+            row.growthPct[year] = null;
+          }
+        }
+      }
+    }
+
+    if (totalRow) {
+      totalRow.valuesBn[year] = Number(sumBn.toFixed(2));
+      totalRow.valuesIdr[year] = Math.round(sumIdr);
+      if (i > 0) {
+        const prevYear = years[i - 1];
+        const prevTotal = totalRow.valuesBn[prevYear] ?? 0;
+        totalRow.growthPct = totalRow.growthPct || {};
+        if (prevTotal > 0) {
+          totalRow.growthPct[year] = Number((((sumBn - prevTotal) / prevTotal) * 100).toFixed(1));
+        }
+      }
+    }
+  }
+
+  return updated;
 }

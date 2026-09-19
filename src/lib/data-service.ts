@@ -5,7 +5,7 @@ import { INITIAL_DATASET } from './initial-data';
 export async function getAllScenarios(): Promise<ScenarioDataset[]> {
   try {
     const res = await pool.query(
-      'SELECT id, slug, title, description, years, items, is_locked, created_at, updated_at FROM scenarios ORDER BY updated_at DESC'
+      'SELECT id, slug, title, description, years, items, brand_breakdown, is_locked, created_at, updated_at FROM scenarios ORDER BY updated_at DESC'
     );
 
     if (res.rows.length === 0) {
@@ -21,6 +21,7 @@ export async function getAllScenarios(): Promise<ScenarioDataset[]> {
       description: row.description,
       years: row.years,
       items: row.items,
+      brandBreakdown: row.brand_breakdown || [],
       isLocked: row.is_locked,
       createdAt: row.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString(),
       updatedAt: row.updated_at ? new Date(row.updated_at).toISOString() : new Date().toISOString(),
@@ -34,7 +35,7 @@ export async function getAllScenarios(): Promise<ScenarioDataset[]> {
 export async function getScenarioBySlug(slug: string): Promise<ScenarioDataset> {
   try {
     const res = await pool.query(
-      'SELECT id, slug, title, description, years, items, is_locked, created_at, updated_at FROM scenarios WHERE slug = $1 LIMIT 1',
+      'SELECT id, slug, title, description, years, items, brand_breakdown, is_locked, created_at, updated_at FROM scenarios WHERE slug = $1 LIMIT 1',
       [slug]
     );
 
@@ -47,6 +48,7 @@ export async function getScenarioBySlug(slug: string): Promise<ScenarioDataset> 
         description: row.description,
         years: row.years,
         items: row.items,
+        brandBreakdown: row.brand_breakdown || [],
         isLocked: row.is_locked,
         createdAt: row.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString(),
         updatedAt: row.updated_at ? new Date(row.updated_at).toISOString() : new Date().toISOString(),
@@ -64,13 +66,14 @@ export async function saveScenario(dataset: ScenarioDataset): Promise<ScenarioDa
   try {
     const now = new Date();
     await pool.query(
-      `INSERT INTO scenarios (id, slug, title, description, years, items, is_locked, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `INSERT INTO scenarios (id, slug, title, description, years, items, brand_breakdown, is_locked, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        ON CONFLICT (slug) DO UPDATE SET
          title = EXCLUDED.title,
          description = EXCLUDED.description,
          years = EXCLUDED.years,
          items = EXCLUDED.items,
+         brand_breakdown = EXCLUDED.brand_breakdown,
          is_locked = EXCLUDED.is_locked,
          updated_at = EXCLUDED.updated_at`,
       [
@@ -80,6 +83,7 @@ export async function saveScenario(dataset: ScenarioDataset): Promise<ScenarioDa
         dataset.description || '',
         JSON.stringify(dataset.years),
         JSON.stringify(dataset.items),
+        JSON.stringify(dataset.brandBreakdown || []),
         dataset.isLocked || false,
         now,
       ]

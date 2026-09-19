@@ -7,6 +7,15 @@ export interface FinancialRowData {
   values: Record<string, number>; // e.g. { '2025': 482.5, '2026': 520.0, ... }
 }
 
+export interface BrandRowData {
+  id: string;
+  name: string;
+  category: 'existing' | 'acquisition' | 'header_fnb' | 'fnb_new' | 'header_retail' | 'retail_new' | 'total';
+  valuesIdr: Record<string, number>; // Full Rupiah
+  valuesBn: Record<string, number>;  // In IDR Billion
+  growthPct?: Record<string, number | null>; // YoY %
+}
+
 export interface ScenarioDataset {
   id: string;
   slug: string;
@@ -17,6 +26,7 @@ export interface ScenarioDataset {
   isLocked?: boolean;
   years: string[];
   items: Record<string, FinancialRowData>;
+  brandBreakdown?: BrandRowData[];
 }
 
 export interface ChartDataPoint {

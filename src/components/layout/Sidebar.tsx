@@ -40,7 +40,7 @@ export default function Sidebar({
 
   const navItems = [
     { id: 'grid', label: 'P&L Combine Grid', icon: Table2, badge: 'Live' },
-    { id: 'divisions', label: 'Division Breakdown', icon: Layers, badge: null },
+    { id: 'divisions', label: 'Division & Brands', icon: Layers, badge: '15 Brands' },
     { id: 'scenarios', label: 'Scenario Manager', icon: FolderKanban, badge: null },
   ];
 
