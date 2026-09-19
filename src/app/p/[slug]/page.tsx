@@ -29,7 +29,7 @@ export default function PresentationPage() {
   const [unitMode, setUnitMode] = useState<'idrbn' | 'pct'>('idrbn');
   const [isCopied, setIsCopied] = useState(false);
   const [blackout, setBlackout] = useState(false);
-  const [isLightMode, setIsLightMode] = useState(false);
+  const [isLightMode, setIsLightMode] = useState(true);
 
   useEffect(() => {
     async function loadScenario() {

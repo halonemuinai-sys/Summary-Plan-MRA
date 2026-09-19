@@ -32,7 +32,7 @@ export default function AdminPage() {
   const [scenariosList, setScenariosList] = useState<ScenarioDataset[]>([INITIAL_DATASET]);
   const [highlightedRow, setHighlightedRow] = useState<string | null>(null);
   const [origin, setOrigin] = useState('');
-  const [isLightMode, setIsLightMode] = useState(false);
+  const [isLightMode, setIsLightMode] = useState(true);
   const [brandViewMode, setBrandViewMode] = useState<'bn' | 'full' | 'growth'>('bn');
   const [highlightedBrandRow, setHighlightedBrandRow] = useState<string | null>(null);
   const brandYears = ['2026', '2027', '2028', '2029', '2030', '2031'];

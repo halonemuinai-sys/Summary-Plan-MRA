@@ -15,7 +15,7 @@ interface HighlightsStudioProps {
   isLightMode?: boolean;
 }
 
-export default function HighlightsStudio({ isLightMode = false }: HighlightsStudioProps) {
+export default function HighlightsStudio({ isLightMode = true }: HighlightsStudioProps) {
   const router = useRouter();
   const [highlightsData, setHighlightsData] = useState<FinancialHighlightsData>(INITIAL_HIGHLIGHTS_DATA);
   const [isSaving, setIsSaving] = useState(false);
