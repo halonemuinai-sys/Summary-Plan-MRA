@@ -13,6 +13,7 @@ import {
 } from 'recharts';
 import Sidebar from '@/components/layout/Sidebar';
 import Topbar from '@/components/layout/Topbar';
+import HighlightsStudio from '@/components/admin/HighlightsStudio';
 import { ScenarioDataset, BrandRowData } from '@/lib/types';
 import { INITIAL_DATASET, INITIAL_BRAND_BREAKDOWN } from '@/lib/initial-data';
 import { recalculateFinancials, recalculateBrandBreakdown } from '@/lib/formula-engine';
@@ -274,6 +275,8 @@ export default function AdminPage() {
               ? 'P&L Consolidation Grid (Sheet: PL Combine)'
               : activeTab === 'divisions'
               ? 'Brand Revenue Matrix & Division Breakdown'
+              : activeTab === 'highlights'
+              ? 'Financial Highlights Studio & Deck Editor'
               : 'Scenario Management'
           }
           activeScenarioSlug={activeScenarioSlug}
@@ -932,6 +935,11 @@ export default function AdminPage() {
                 </div>
               </div>
             </div>
+          )}
+
+          {/* TAB 4: FINANCIAL HIGHLIGHTS STUDIO */}
+          {activeTab === 'highlights' && (
+            <HighlightsStudio isLightMode={isLightMode} />
           )}
 
         </div>

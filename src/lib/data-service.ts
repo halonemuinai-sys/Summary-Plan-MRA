@@ -1,6 +1,7 @@
 import pool from './db';
-import { ScenarioDataset } from './types';
+import { ScenarioDataset, FinancialHighlightsData } from './types';
 import { INITIAL_DATASET } from './initial-data';
+import { INITIAL_HIGHLIGHTS_DATA } from './highlights-data';
 
 export async function getAllScenarios(): Promise<ScenarioDataset[]> {
   try {
@@ -92,6 +93,38 @@ export async function saveScenario(dataset: ScenarioDataset): Promise<ScenarioDa
     return dataset;
   } catch (err) {
     console.error('PostgreSQL Error in saveScenario:', err);
+    throw err;
+  }
+}
+
+export async function getFinancialHighlights(): Promise<FinancialHighlightsData> {
+  try {
+    const res = await pool.query(
+      'SELECT data FROM financial_highlights WHERE id = $1 LIMIT 1',
+      ['main']
+    );
+    if (res.rows.length > 0 && res.rows[0].data) {
+      return res.rows[0].data as FinancialHighlightsData;
+    }
+  } catch (err) {
+    console.error('PostgreSQL Error in getFinancialHighlights:', err);
+  }
+  return INITIAL_HIGHLIGHTS_DATA;
+}
+
+export async function saveFinancialHighlights(
+  data: FinancialHighlightsData
+): Promise<FinancialHighlightsData> {
+  try {
+    await pool.query(
+      `INSERT INTO financial_highlights (id, data, updated_at)
+       VALUES ($1, $2, NOW())
+       ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, updated_at = NOW()`,
+      ['main', JSON.stringify(data)]
+    );
+    return data;
+  } catch (err) {
+    console.error('PostgreSQL Error in saveFinancialHighlights:', err);
     throw err;
   }
 }

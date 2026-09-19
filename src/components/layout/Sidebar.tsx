@@ -5,7 +5,7 @@ import Link from 'next/link';
 import {
   Table2, Layers, FolderKanban, MonitorPlay,
   ChevronLeft, ChevronRight, DollarSign, Activity,
-  TrendingUp, ArrowUpRight, Calendar
+  TrendingUp, ArrowUpRight, Calendar, Sparkles
 } from 'lucide-react';
 import { ScenarioDataset } from '@/lib/types';
 
@@ -41,6 +41,7 @@ export default function Sidebar({
   const navItems = [
     { id: 'grid', label: 'P&L Combine Grid', icon: Table2, badge: 'Live' },
     { id: 'divisions', label: 'Division & Brands', icon: Layers, badge: '15 Brands' },
+    { id: 'highlights', label: 'Financial Highlights', icon: Sparkles, badge: 'Deck' },
     { id: 'scenarios', label: 'Scenario Manager', icon: FolderKanban, badge: null },
   ];
 
@@ -209,24 +210,45 @@ export default function Sidebar({
               Presentation
             </p>
           )}
-          <Link
-            href={`/p/${activeScenarioSlug}`}
-            className={`flex items-center rounded-xl text-xs font-bold transition-all relative group overflow-hidden ${
-              isCollapsed ? 'justify-center p-3' : 'gap-3 px-3.5 py-3'
-            } ${
-              isLightMode
-                ? 'text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100/70'
-                : 'text-emerald-400 bg-emerald-950/20 border border-emerald-800/40 hover:bg-emerald-900/30'
-            } shadow-sm`}
-          >
-            <MonitorPlay size={16} className="shrink-0 group-hover:scale-110 transition-transform" />
-            {!isCollapsed && (
-              <>
-                <span className="flex-1 text-left truncate">16:9 Cockpit Deck</span>
-                <ArrowUpRight size={14} className="opacity-80" />
-              </>
-            )}
-          </Link>
+          <div className="space-y-1.5">
+            <Link
+              href={`/p/${activeScenarioSlug}`}
+              className={`flex items-center rounded-xl text-xs font-bold transition-all relative group overflow-hidden ${
+                isCollapsed ? 'justify-center p-3' : 'gap-3 px-3.5 py-3'
+              } ${
+                isLightMode
+                  ? 'text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100/70'
+                  : 'text-emerald-400 bg-emerald-950/20 border border-emerald-800/40 hover:bg-emerald-900/30'
+              } shadow-sm`}
+            >
+              <MonitorPlay size={16} className="shrink-0 group-hover:scale-110 transition-transform" />
+              {!isCollapsed && (
+                <>
+                  <span className="flex-1 text-left truncate">16:9 Cockpit Deck</span>
+                  <ArrowUpRight size={14} className="opacity-80" />
+                </>
+              )}
+            </Link>
+
+            <Link
+              href="/highlights"
+              className={`flex items-center rounded-xl text-xs font-bold transition-all relative group overflow-hidden ${
+                isCollapsed ? 'justify-center p-3' : 'gap-3 px-3.5 py-3'
+              } ${
+                isLightMode
+                  ? 'text-amber-800 bg-amber-50 border border-amber-200 hover:bg-amber-100/70'
+                  : 'text-amber-400 bg-amber-950/20 border border-amber-800/40 hover:bg-amber-900/30'
+              } shadow-sm`}
+            >
+              <Sparkles size={16} className="shrink-0 group-hover:scale-110 transition-transform text-amber-500" />
+              {!isCollapsed && (
+                <>
+                  <span className="flex-1 text-left truncate">Highlights Deck</span>
+                  <ArrowUpRight size={14} className="opacity-80" />
+                </>
+              )}
+            </Link>
+          </div>
         </div>
       </nav>
 

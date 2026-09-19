@@ -41,3 +41,51 @@ export interface ChartDataPoint {
   npat: number;
   npatMargin: number;
 }
+
+export interface HighlightsKpis {
+  revenue: { value: number; unit: string; yoyPct: number; yoyText: string };
+  ebitda: { value: number; unit: string; yoyPct: number; yoyText: string };
+  eat: { value: number; unit: string; yoyPct: number; yoyText: string };
+  gpm: { value: number; unit: string; yoyDiff: number; yoyText: string };
+}
+
+export interface RevenueTrajectoryPoint {
+  year: string;
+  value: number;
+  isForecast: boolean;
+}
+
+export interface PnlTrajectoryPoint {
+  year: string;
+  gp: number;
+  ebitda: number;
+  ebit: number;
+  eat: number;
+}
+
+export interface MarginsTrajectoryPoint {
+  year: string;
+  gpm: number;
+  ebitdam: number;
+  ebitm: number;
+  eatm: number;
+}
+
+export interface CashflowTrajectoryPoint {
+  year: string;
+  cfo: number;
+  cfi: number;
+  cff: number;
+}
+
+export interface FinancialHighlightsData {
+  title: string;
+  subtitle: string;
+  kpis: HighlightsKpis;
+  revenueTrajectory: RevenueTrajectoryPoint[];
+  pnlTrajectory: PnlTrajectoryPoint[];
+  marginsTrajectory: MarginsTrajectoryPoint[];
+  cashflowTrajectory: CashflowTrajectoryPoint[];
+  footerNote: string;
+  confidentialText: string;
+}
