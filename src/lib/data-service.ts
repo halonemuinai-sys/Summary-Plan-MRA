@@ -1,62 +1,93 @@
+import pool from './db';
 import { ScenarioDataset } from './types';
 import { INITIAL_DATASET } from './initial-data';
-import fs from 'fs';
-import path from 'path';
 
-const DATA_DIR = path.join(process.cwd(), 'data', 'scenarios');
+export async function getAllScenarios(): Promise<ScenarioDataset[]> {
+  try {
+    const res = await pool.query(
+      'SELECT id, slug, title, description, years, items, is_locked, created_at, updated_at FROM scenarios ORDER BY updated_at DESC'
+    );
 
-function ensureDataDir() {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
+    if (res.rows.length === 0) {
+      // Auto seed if empty
+      await saveScenario(INITIAL_DATASET);
+      return [INITIAL_DATASET];
+    }
+
+    return res.rows.map((row) => ({
+      id: row.id,
+      slug: row.slug,
+      title: row.title,
+      description: row.description,
+      years: row.years,
+      items: row.items,
+      isLocked: row.is_locked,
+      createdAt: row.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString(),
+      updatedAt: row.updated_at ? new Date(row.updated_at).toISOString() : new Date().toISOString(),
+    }));
+  } catch (err) {
+    console.error('PostgreSQL Error in getAllScenarios, fallback to default:', err);
+    return [INITIAL_DATASET];
   }
 }
 
-export function getAllScenarios(): ScenarioDataset[] {
-  ensureDataDir();
-  const scenarios: ScenarioDataset[] = [INITIAL_DATASET];
-
+export async function getScenarioBySlug(slug: string): Promise<ScenarioDataset> {
   try {
-    const files = fs.readdirSync(DATA_DIR);
-    for (const file of files) {
-      if (file.endsWith('.json')) {
-        const content = fs.readFileSync(path.join(DATA_DIR, file), 'utf-8');
-        const parsed = JSON.parse(content) as ScenarioDataset;
-        if (parsed.slug !== INITIAL_DATASET.slug) {
-          scenarios.push(parsed);
-        }
-      }
+    const res = await pool.query(
+      'SELECT id, slug, title, description, years, items, is_locked, created_at, updated_at FROM scenarios WHERE slug = $1 LIMIT 1',
+      [slug]
+    );
+
+    if (res.rows.length > 0) {
+      const row = res.rows[0];
+      return {
+        id: row.id,
+        slug: row.slug,
+        title: row.title,
+        description: row.description,
+        years: row.years,
+        items: row.items,
+        isLocked: row.is_locked,
+        createdAt: row.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString(),
+        updatedAt: row.updated_at ? new Date(row.updated_at).toISOString() : new Date().toISOString(),
+      };
     }
   } catch (err) {
-    console.error('Error reading scenarios:', err);
+    console.error(`PostgreSQL Error in getScenarioBySlug(${slug}):`, err);
   }
 
-  return scenarios;
-}
-
-export function getScenarioBySlug(slug: string): ScenarioDataset {
-  if (slug === INITIAL_DATASET.slug) {
-    return INITIAL_DATASET;
-  }
-
-  ensureDataDir();
-  const filePath = path.join(DATA_DIR, `${slug}.json`);
-  if (fs.existsSync(filePath)) {
-    try {
-      const content = fs.readFileSync(filePath, 'utf-8');
-      return JSON.parse(content);
-    } catch (err) {
-      console.error(`Error reading scenario ${slug}:`, err);
-    }
-  }
-
-  // Fallback to initial
+  // Fallback if not found
   return INITIAL_DATASET;
 }
 
-export function saveScenario(dataset: ScenarioDataset): ScenarioDataset {
-  ensureDataDir();
-  const filePath = path.join(DATA_DIR, `${dataset.slug}.json`);
-  dataset.updatedAt = new Date().toISOString();
-  fs.writeFileSync(filePath, JSON.stringify(dataset, null, 2), 'utf-8');
-  return dataset;
+export async function saveScenario(dataset: ScenarioDataset): Promise<ScenarioDataset> {
+  try {
+    const now = new Date();
+    await pool.query(
+      `INSERT INTO scenarios (id, slug, title, description, years, items, is_locked, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       ON CONFLICT (slug) DO UPDATE SET
+         title = EXCLUDED.title,
+         description = EXCLUDED.description,
+         years = EXCLUDED.years,
+         items = EXCLUDED.items,
+         is_locked = EXCLUDED.is_locked,
+         updated_at = EXCLUDED.updated_at`,
+      [
+        dataset.id || dataset.slug,
+        dataset.slug,
+        dataset.title,
+        dataset.description || '',
+        JSON.stringify(dataset.years),
+        JSON.stringify(dataset.items),
+        dataset.isLocked || false,
+        now,
+      ]
+    );
+    dataset.updatedAt = now.toISOString();
+    return dataset;
+  } catch (err) {
+    console.error('PostgreSQL Error in saveScenario:', err);
+    throw err;
+  }
 }

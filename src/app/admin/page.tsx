@@ -4,11 +4,13 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   UploadCloud, Save, PlusCircle, ExternalLink, Copy, Check,
-  RefreshCw, FileSpreadsheet, Lock, Edit3, ArrowRight, ShieldCheck
+  RefreshCw, FileSpreadsheet, Lock, Edit3, ArrowRight, Database,
+  Sparkles, CheckCircle2
 } from 'lucide-react';
 import { ScenarioDataset, FinancialRowData } from '@/lib/types';
 import { INITIAL_DATASET } from '@/lib/initial-data';
 import { recalculateFinancials } from '@/lib/formula-engine';
+import confetti from 'canvas-confetti';
 import * as XLSX from 'xlsx';
 
 export default function AdminPage() {
@@ -22,11 +24,12 @@ export default function AdminPage() {
   const [copiedLink, setCopiedLink] = useState(false);
   const [scenariosList, setScenariosList] = useState<ScenarioDataset[]>([INITIAL_DATASET]);
   const [uploadStatus, setUploadStatus] = useState<string | null>(null);
+  const [highlightedRow, setHighlightedRow] = useState<string | null>(null);
 
-  // Focus years for business plan (2025 to 2031)
+  // Focus years for business plan (2024 to 2031)
   const displayYears = dataset.years.filter(y => parseInt(y) >= 2024);
 
-  // Load scenarios on mount
+  // Load scenarios from PostgreSQL on mount
   useEffect(() => {
     fetchScenarios();
   }, []);
@@ -43,6 +46,16 @@ export default function AdminPage() {
     } catch (err) {
       console.error('Error fetching scenarios:', err);
     }
+  };
+
+  const triggerCelebration = () => {
+    try {
+      confetti({
+        particleCount: 80,
+        spread: 70,
+        origin: { y: 0.6 }
+      });
+    } catch (e) {}
   };
 
   const handleCellChange = (key: string, year: string, valStr: string) => {
@@ -64,6 +77,9 @@ export default function AdminPage() {
       ...prev,
       items: recalculated
     }));
+
+    setHighlightedRow(key);
+    setTimeout(() => setHighlightedRow(null), 1200);
   };
 
   const handleSaveAsNew = async () => {
@@ -95,11 +111,12 @@ export default function AdminPage() {
         setActiveScenarioSlug(cleanSlug);
         setNewSlug('');
         fetchScenarios();
-        setTimeout(() => setSaveSuccess(false), 3000);
+        triggerCelebration();
+        setTimeout(() => setSaveSuccess(false), 4000);
       }
     } catch (err) {
       console.error('Error saving scenario:', err);
-      alert('Failed to save scenario');
+      alert('Failed to save scenario into PostgreSQL');
     } finally {
       setIsSaving(false);
     }
@@ -123,6 +140,7 @@ export default function AdminPage() {
       if (res.ok) {
         setSaveSuccess(true);
         fetchScenarios();
+        triggerCelebration();
         setTimeout(() => setSaveSuccess(false), 3000);
       }
     } catch (err) {
@@ -151,7 +169,7 @@ export default function AdminPage() {
           return;
         }
 
-        setUploadStatus(`Sheet "${targetSheet}" successfully recognized and updated!`);
+        setUploadStatus(`Sheet "${targetSheet}" recognized! Syncing with PostgreSQL...`);
       } catch (err) {
         console.error('Error reading excel:', err);
         setUploadStatus('Failed to read Excel workbook.');
@@ -163,22 +181,23 @@ export default function AdminPage() {
   const presentationUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/p/${activeScenarioSlug}`;
 
   return (
-    <div className="min-h-screen bg-[#0B0F19] text-slate-100 flex flex-col">
-      {/* Top Header */}
-      <header className="px-6 py-4 border-b border-slate-800 bg-[#111827] flex items-center justify-between sticky top-0 z-30 shadow-md">
+    <div className="min-h-screen bg-[#070B14] text-slate-100 flex flex-col selection:bg-blue-600 selection:text-white">
+      {/* Top Glassmorphic Header */}
+      <header className="px-6 py-4 border-b border-slate-800/80 bg-[#0B0F19]/90 backdrop-blur-md flex items-center justify-between sticky top-0 z-30 shadow-lg">
         <div className="flex items-center gap-3">
-          <div className="bg-blue-600 p-2 rounded-lg text-white">
+          <div className="bg-gradient-to-tr from-blue-600 to-indigo-600 p-2.5 rounded-xl text-white shadow-lg shadow-blue-500/20 ring-1 ring-white/10">
             <FileSpreadsheet className="w-5 h-5" />
           </div>
           <div>
-            <h1 className="text-base font-bold text-white flex items-center gap-2">
-              MRA P&L Data Studio
-              <span className="text-xs bg-blue-900/60 text-blue-300 font-semibold px-2 py-0.5 rounded border border-blue-700/50">
-                Altius Rev3 Backend
+            <div className="flex items-center gap-2">
+              <h1 className="text-base font-bold text-white">MRA P&L Data Studio</h1>
+              <span className="text-[10px] bg-emerald-500/10 text-emerald-400 font-semibold px-2 py-0.5 rounded border border-emerald-500/20 flex items-center gap-1">
+                <Database className="w-3 h-3" />
+                PostgreSQL Active
               </span>
-            </h1>
+            </div>
             <p className="text-xs text-slate-400">
-              Interactive In-Browser Spreadsheet & Dynamic Presentation Link Generator
+              Interactive In-Browser Spreadsheet Grid & Dynamic Multi-Scenario Generator
             </p>
           </div>
         </div>
@@ -186,7 +205,7 @@ export default function AdminPage() {
         <div className="flex items-center gap-3">
           <button
             onClick={() => router.push(`/p/${activeScenarioSlug}`)}
-            className="flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg transition-all"
+            className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-lg shadow-emerald-600/20 transition-all active:scale-95"
           >
             <ExternalLink className="w-4 h-4" />
             Launch 16:9 Presentation Deck
@@ -196,52 +215,57 @@ export default function AdminPage() {
 
       <div className="flex-1 p-6 max-w-7xl mx-auto w-full space-y-6">
 
-        {/* Action Panel: Excel Uploader & Scenario Link Generation */}
+        {/* Action Panel: 3 Executive Cards */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
-          {/* 1. Excel Uploader */}
-          <div className="bg-[#111827] border border-slate-800 rounded-xl p-4 flex flex-col justify-between">
+          {/* 1. Database & Excel Sync */}
+          <div className="bg-[#101726]/90 border border-slate-800/90 rounded-2xl p-5 flex flex-col justify-between shadow-xl backdrop-blur-sm">
             <div>
-              <h2 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2 flex items-center gap-1.5">
-                <UploadCloud className="w-4 h-4 text-blue-400" />
-                Excel Backend Upload
-              </h2>
+              <div className="flex items-center justify-between mb-2">
+                <h2 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                  <Database className="w-4 h-4 text-emerald-400" />
+                  PostgreSQL Data Source
+                </h2>
+                <span className="text-[10px] font-semibold text-emerald-400 bg-emerald-950/60 border border-emerald-800/60 px-2 py-0.5 rounded">
+                  Connected
+                </span>
+              </div>
               <p className="text-xs text-slate-400 mb-3">
-                Drop your updated <code className="text-blue-300">Group MRA Summary Plan.xlsx</code> to sync all figures.
+                All scenarios are saved in PostgreSQL (<code className="text-blue-300">mra_summary_plan</code>). No Excel upload needed for day-to-day edits.
               </p>
-              <label className="border-2 border-dashed border-slate-700 hover:border-blue-500 rounded-lg p-4 flex flex-col items-center justify-center cursor-pointer transition-colors bg-slate-900/40">
-                <FileSpreadsheet className="w-6 h-6 text-slate-400 mb-1" />
-                <span className="text-xs font-semibold text-slate-300">Click to Browse Excel (.xlsx)</span>
-                <span className="text-[10px] text-slate-500">Auto-reads sheet 'PL MRA Group+Holding'</span>
+              <label className="border-2 border-dashed border-slate-700/80 hover:border-blue-500 rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer transition-colors bg-slate-900/40 group">
+                <UploadCloud className="w-5 h-5 text-slate-400 group-hover:text-blue-400 mb-1 transition-colors" />
+                <span className="text-xs font-semibold text-slate-300">Optional: Overwrite via Excel</span>
+                <span className="text-[10px] text-slate-500">Auto-syncs sheet 'PL MRA Group+Holding'</span>
                 <input type="file" accept=".xlsx,.xls" onChange={handleFileUpload} className="hidden" />
               </label>
             </div>
             {uploadStatus && (
-              <div className="mt-2 text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/60 p-2 rounded">
+              <div className="mt-2 text-xs text-emerald-400 bg-emerald-950/50 border border-emerald-800/60 p-2 rounded-lg">
                 {uploadStatus}
               </div>
             )}
           </div>
 
           {/* 2. Active Scenario Settings */}
-          <div className="bg-[#111827] border border-slate-800 rounded-xl p-4 flex flex-col justify-between">
+          <div className="bg-[#101726]/90 border border-slate-800/90 rounded-2xl p-5 flex flex-col justify-between shadow-xl backdrop-blur-sm">
             <div>
-              <h2 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2 flex items-center gap-1.5">
+              <h2 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2.5 flex items-center gap-1.5">
                 <Edit3 className="w-4 h-4 text-amber-400" />
                 Active Scenario Info
               </h2>
-              <div className="space-y-2">
+              <div className="space-y-2.5">
                 <div>
                   <label className="text-[11px] font-semibold text-slate-400">Scenario Title</label>
                   <input
                     type="text"
                     value={scenarioTitle}
                     onChange={(e) => setScenarioTitle(e.target.value)}
-                    className="w-full text-xs rounded bg-slate-900 border border-slate-700 px-2.5 py-1.5 text-white font-medium focus:border-blue-500 outline-none"
+                    className="w-full text-xs rounded-lg bg-slate-900/80 border border-slate-700/80 px-3 py-1.5 text-white font-medium focus:border-blue-500 outline-none"
                   />
                 </div>
                 <div>
-                  <label className="text-[11px] font-semibold text-slate-400">Select Loaded Scenario</label>
+                  <label className="text-[11px] font-semibold text-slate-400">Select Stored Scenario ({scenariosList.length})</label>
                   <select
                     value={activeScenarioSlug}
                     onChange={(e) => {
@@ -252,7 +276,7 @@ export default function AdminPage() {
                         setScenarioTitle(sel.title);
                       }
                     }}
-                    className="w-full text-xs rounded bg-slate-900 border border-slate-700 px-2.5 py-1.5 text-white font-medium focus:border-blue-500 outline-none"
+                    className="w-full text-xs rounded-lg bg-slate-900/80 border border-slate-700/80 px-3 py-1.5 text-white font-medium focus:border-blue-500 outline-none"
                   >
                     {scenariosList.map(s => (
                       <option key={s.slug} value={s.slug}>{s.title} ({s.slug})</option>
@@ -262,38 +286,43 @@ export default function AdminPage() {
               </div>
             </div>
 
-            <div className="mt-3 flex items-center gap-2">
+            <div className="mt-3">
               <button
                 onClick={handleUpdateCurrent}
                 disabled={isSaving}
-                className="flex-1 text-xs font-semibold py-1.5 px-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center gap-1.5 transition-all"
+                className="w-full text-xs font-semibold py-2 px-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white flex items-center justify-center gap-1.5 transition-all shadow-md shadow-blue-600/20 active:scale-95"
               >
                 <Save className="w-3.5 h-3.5" />
-                {isSaving ? 'Saving...' : 'Update Current Scenario'}
+                {isSaving ? 'Updating...' : 'Save Changes to Current Scenario'}
               </button>
             </div>
           </div>
 
-          {/* 3. Publish as New Scenario (Unique Link) */}
-          <div className="bg-[#111827] border border-slate-800 rounded-xl p-4 flex flex-col justify-between">
+          {/* 3. Publish as New Unique Link */}
+          <div className="bg-[#101726]/90 border border-slate-800/90 rounded-2xl p-5 flex flex-col justify-between shadow-xl backdrop-blur-sm">
             <div>
-              <h2 className="text-xs font-bold uppercase tracking-wider text-emerald-400 mb-2 flex items-center gap-1.5">
-                <PlusCircle className="w-4 h-4 text-emerald-400" />
-                Publish as New Unique Link
-              </h2>
+              <div className="flex items-center justify-between mb-2">
+                <h2 className="text-xs font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
+                  <Sparkles className="w-4 h-4 text-emerald-400" />
+                  Publish New Unique Link
+                </h2>
+                <span className="text-[10px] bg-emerald-500/10 text-emerald-400 font-semibold px-2 py-0.5 rounded border border-emerald-500/20">
+                  New URL
+                </span>
+              </div>
               <p className="text-xs text-slate-400 mb-2">
-                Modified numbers? Create a separate, permanent presentation URL without overwriting previous decks.
+                Modified numbers? Generate an independent, permanent presentation URL without overwriting previous decks.
               </p>
               <div>
-                <label className="text-[11px] font-semibold text-slate-400">New Slug Identifier (/p/[slug])</label>
+                <label className="text-[11px] font-semibold text-slate-400">Slug Identifier (/p/[slug])</label>
                 <div className="flex items-center mt-1">
-                  <span className="text-xs text-slate-500 bg-slate-900 px-2 py-1.5 rounded-l border border-r-0 border-slate-700">/p/</span>
+                  <span className="text-xs text-slate-500 bg-slate-900 px-2.5 py-1.5 rounded-l-lg border border-r-0 border-slate-700">/p/</span>
                   <input
                     type="text"
-                    placeholder="e.g. mra-scenario-optimistic-2027"
+                    placeholder="e.g. mra-optimistic-opex-2027"
                     value={newSlug}
                     onChange={(e) => setNewSlug(e.target.value)}
-                    className="w-full text-xs rounded-r bg-slate-900 border border-slate-700 px-2 py-1.5 text-white focus:border-emerald-500 outline-none font-mono"
+                    className="w-full text-xs rounded-r-lg bg-slate-900 border border-slate-700 px-2.5 py-1.5 text-white focus:border-emerald-500 outline-none font-mono"
                   />
                 </div>
               </div>
@@ -303,14 +332,14 @@ export default function AdminPage() {
               <button
                 onClick={handleSaveAsNew}
                 disabled={isSaving}
-                className="w-full text-xs font-semibold py-1.5 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center gap-1.5 transition-all shadow-md"
+                className="w-full text-xs font-semibold py-2 px-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white flex items-center justify-center gap-1.5 transition-all shadow-md shadow-emerald-600/20 active:scale-95"
               >
                 <PlusCircle className="w-3.5 h-3.5" />
-                {isSaving ? 'Creating...' : 'Publish as New Scenario Link'}
+                {isSaving ? 'Publishing...' : 'Publish as New Scenario Link'}
               </button>
               {saveSuccess && (
-                <div className="text-[11px] text-emerald-400 text-center font-medium">
-                  ✔ Scenario published successfully!
+                <div className="text-[11px] text-emerald-400 flex items-center justify-center gap-1 font-medium animate-pulse">
+                  <CheckCircle2 className="w-3.5 h-3.5" /> Scenario committed to PostgreSQL!
                 </div>
               )}
             </div>
@@ -319,10 +348,10 @@ export default function AdminPage() {
         </div>
 
         {/* Live Presentation URL Sharing Bar */}
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-3 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-400">Live Presentation URL:</span>
-            <span className="text-xs font-mono text-blue-400 font-semibold bg-slate-950 px-2.5 py-1 rounded border border-slate-800">
+        <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-3.5 flex flex-wrap items-center justify-between gap-3 shadow-lg">
+          <div className="flex items-center gap-2.5">
+            <span className="text-xs text-slate-400 font-medium">Live Presentation URL:</span>
+            <span className="text-xs font-mono text-blue-400 font-semibold bg-slate-950 px-3 py-1 rounded-lg border border-slate-800">
               {presentationUrl}
             </span>
           </div>
@@ -333,14 +362,14 @@ export default function AdminPage() {
                 setCopiedLink(true);
                 setTimeout(() => setCopiedLink(false), 2000);
               }}
-              className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-all"
+              className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-all active:scale-95"
             >
               {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
               {copiedLink ? 'Copied' : 'Copy Link'}
             </button>
             <button
               onClick={() => router.push(`/p/${activeScenarioSlug}`)}
-              className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded bg-blue-600 hover:bg-blue-700 text-white transition-all shadow"
+              className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-all shadow-md shadow-blue-600/30 active:scale-95"
             >
               <ArrowRight className="w-3.5 h-3.5" />
               Open Deck
@@ -348,49 +377,50 @@ export default function AdminPage() {
           </div>
         </div>
 
-        {/* Interactive In-Browser Spreadsheet Grid */}
-        <div className="bg-[#111827] border border-slate-800 rounded-xl p-4 shadow-xl">
-          <div className="flex items-center justify-between mb-3">
+        {/* In-Browser Interactive Spreadsheet Grid */}
+        <div className="bg-[#101726]/90 border border-slate-800/90 rounded-2xl p-5 shadow-2xl backdrop-blur-sm">
+          <div className="flex items-center justify-between mb-4">
             <div>
               <h2 className="text-sm font-bold text-white flex items-center gap-2">
                 In-Browser Spreadsheet Grid: PL MRA Group+Holding (Combine)
-                <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded font-semibold border border-emerald-500/30">
-                  Editable Cells & Auto-Recalculate Active
+                <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full font-semibold border border-emerald-500/30">
+                  Live Recalculate Active
                 </span>
               </h2>
-              <p className="text-xs text-slate-400">
-                Click on any cell to edit numbers (All values in IDR Billion). GP, OPEX, EBITDA, and NPAT auto-recalculate.
+              <p className="text-xs text-slate-400 mt-0.5">
+                Click on any cell to edit numbers (Values in IDR Billion). Gross Profit, OPEX, EBITDA, and NPAT auto-recalculate.
               </p>
             </div>
           </div>
 
-          <div className="overflow-x-auto border border-slate-800 rounded-lg max-h-[550px]">
+          <div className="overflow-x-auto border border-slate-800 rounded-xl max-h-[550px] shadow-inner">
             <table className="w-full text-xs text-left border-collapse">
-              <thead className="bg-[#1F2937] text-slate-200 sticky top-0 z-20 shadow">
+              <thead className="bg-[#162032] text-slate-200 sticky top-0 z-20 shadow">
                 <tr>
-                  <th className="py-2.5 px-3 font-semibold border-b border-r border-slate-700 w-64 bg-[#1F2937]">
+                  <th className="py-3 px-4 font-semibold border-b border-r border-slate-700/80 w-64 bg-[#162032]">
                     Financial Line Item
                   </th>
                   {displayYears.map(y => (
-                    <th key={y} className="py-2.5 px-3 font-semibold border-b border-r border-slate-700 text-right min-w-[100px]">
+                    <th key={y} className="py-3 px-4 font-semibold border-b border-r border-slate-700/80 text-right min-w-[105px]">
                       {y} {parseInt(y) === 2026 ? '(Proj)' : parseInt(y) >= 2027 ? '(Plan)' : ''}
                     </th>
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800">
+              <tbody className="divide-y divide-slate-800/80">
                 {Object.entries(dataset.items).map(([key, row]) => {
                   const isFormula = row.isFormula || ['gross_profit', 'gp_margin', 'total_opex', 'operating_profit', 'ebitda_after_holding', 'npat'].includes(key);
                   const isHeaderRow = ['total_revenue', 'gross_profit', 'total_opex', 'operating_profit', 'ebitda_after_holding', 'npat'].includes(key);
+                  const isHighlighted = highlightedRow === key;
 
                   return (
                     <tr
                       key={key}
-                      className={`hover:bg-slate-800/50 transition-colors ${
-                        isHeaderRow ? 'bg-slate-900/80 font-bold text-slate-100' : 'text-slate-300'
+                      className={`hover:bg-slate-800/40 transition-colors ${
+                        isHighlighted ? 'bg-blue-900/30' : isHeaderRow ? 'bg-slate-900/80 font-bold text-slate-100' : 'text-slate-300'
                       }`}
                     >
-                      <td className="py-2 px-3 border-r border-slate-800 flex items-center justify-between">
+                      <td className="py-2.5 px-4 border-r border-slate-800/80 flex items-center justify-between">
                         <span className={key.startsWith('rev_') || key.startsWith('cogs_') ? 'pl-4 text-slate-400' : ''}>
                           {row.description}
                         </span>
@@ -404,7 +434,7 @@ export default function AdminPage() {
                       {displayYears.map(year => {
                         const val = row.values[year] ?? 0;
                         return (
-                          <td key={year} className="py-1 px-2 border-r border-slate-800 text-right">
+                          <td key={year} className="py-1 px-2 border-r border-slate-800/80 text-right">
                             {isFormula ? (
                               <span className="font-mono text-emerald-400 font-semibold px-2 py-1 block">
                                 {key.includes('margin') ? `${val}%` : val.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 2 })}
@@ -415,7 +445,7 @@ export default function AdminPage() {
                                 step="0.1"
                                 defaultValue={val}
                                 onBlur={(e) => handleCellChange(key, year, e.target.value)}
-                                className="w-full text-right font-mono text-xs rounded px-2 py-1 bg-slate-900 border border-slate-700/60 hover:border-blue-500 focus:border-blue-400 focus:bg-slate-800 text-white outline-none transition-all"
+                                className="w-full text-right font-mono text-xs rounded-lg px-2.5 py-1 bg-slate-900/80 border border-slate-700/60 hover:border-blue-500 focus:border-blue-400 focus:bg-slate-800 text-white outline-none transition-all shadow-inner"
                               />
                             )}
                           </td>
