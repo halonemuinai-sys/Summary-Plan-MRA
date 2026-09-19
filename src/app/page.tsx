@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { getAllScenarios } from '@/lib/data-service';
 import { INITIAL_DATASET } from '@/lib/initial-data';
-import { MonitorPlay, Settings, ArrowRight, BarChart3, Database, Sparkles } from 'lucide-react';
+import { MonitorPlay, Settings, ArrowRight, BarChart3, Sparkles } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,9 +19,9 @@ export default async function HomePage() {
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-lg font-bold tracking-tight text-white">MRA Group P&L Presentation Engine</h1>
-              <span className="text-[10px] bg-emerald-500/10 text-emerald-400 font-semibold px-2 py-0.5 rounded border border-emerald-500/20 flex items-center gap-1">
-                <Database className="w-3 h-3" />
-                PostgreSQL Connected
+              <span className="text-[10px] bg-emerald-500/10 text-emerald-400 font-semibold px-2 py-0.5 rounded border border-emerald-500/20 flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                Live Sync Ready
               </span>
             </div>
             <p className="text-xs text-slate-400">Business Plan 2025 - 2031 | Altius Rev3 Executive Cockpit</p>
@@ -48,8 +48,8 @@ export default async function HomePage() {
             MRA Group Financial Cockpit
           </h2>
           <p className="text-sm text-slate-400 max-w-xl mx-auto leading-relaxed">
-            Directly connected to your local <strong>PostgreSQL</strong> database. No Excel manual re-uploading required. 
-            Select an active scenario below or edit figures in the Admin Studio.
+            Centralized executive financial repository. No spreadsheet re-uploading required. 
+            Select an active scenario below to launch deck or edit figures in the Admin Studio.
           </p>
         </div>
 
@@ -57,7 +57,7 @@ export default async function HomePage() {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-              Active Scenarios in PostgreSQL ({scenarios.length})
+              Active Scenarios ({scenarios.length})
             </h3>
             <Link href="/admin" className="text-xs text-blue-400 hover:text-blue-300 font-semibold flex items-center gap-1">
               Create New Scenario <ArrowRight className="w-3.5 h-3.5" />
@@ -112,17 +112,17 @@ export default async function HomePage() {
         {/* Feature Highlights Card */}
         <div className="bg-slate-900/50 border border-slate-800/80 rounded-xl p-5 text-xs text-slate-400 space-y-2.5 backdrop-blur-sm">
           <div className="font-bold text-slate-200 uppercase text-[11px] tracking-wider flex items-center gap-2">
-            <Database className="w-4 h-4 text-emerald-400" />
-            PostgreSQL Live Sync Features:
+            <Sparkles className="w-4 h-4 text-blue-400" />
+            Executive Planning Capabilities:
           </div>
           <p>
-            • <strong>Instant Database Persistence:</strong> Any edits made in the Admin Studio are immediately committed to your local PostgreSQL (<code className="text-blue-300">mra_summary_plan</code>) database.
+            • <strong>Instant Persistence:</strong> Any edits made in the Admin Studio are immediately committed and synchronized across all decks.
           </p>
           <p>
             • <strong>Multi-Scenario Isolation:</strong> Save your revised budgets as unique presentation links. Previous links remain locked and untouched for auditing.
           </p>
           <p>
-            • <strong>Executive 16:9 Experience:</strong> Presentation mode features fluid framer-motion animations, one-click zoom, and synced cursor hovering.
+            • <strong>Executive 16:9 Experience:</strong> Presentation mode features fluid animations, one-click zoom, and synchronized metric breakdown.
           </p>
         </div>
       </main>

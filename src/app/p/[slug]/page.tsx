@@ -8,7 +8,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, ReferenceLine
 } from 'recharts';
 import {
-  Maximize2, Minimize2, ArrowLeft, Share2, Database,
+  Maximize2, Minimize2, ArrowLeft, Share2,
   Check, RefreshCw, Sun, Moon, TrendingUp, DollarSign, Layers, Compass
 } from 'lucide-react';
 import { ScenarioDataset } from '@/lib/types';
@@ -146,12 +146,8 @@ export default function PresentationPage() {
               <Compass className="w-3 h-3" />
               MRA Cockpit
             </span>
-            <span className="text-sm font-bold tracking-tight truncate max-w-md text-white">
+            <span className={`text-sm font-bold tracking-tight truncate max-w-md ${isLightMode ? 'text-slate-900' : 'text-white'}`}>
               {dataset.title}
-            </span>
-            <span className="hidden sm:inline-flex items-center gap-1 text-[10px] text-emerald-400 font-semibold bg-emerald-950/60 border border-emerald-800/60 px-2 py-0.5 rounded">
-              <Database className="w-2.5 h-2.5" />
-              PostgreSQL
             </span>
           </div>
         </div>
@@ -552,7 +548,7 @@ export default function PresentationPage() {
           <span className="font-mono bg-slate-800/90 px-2 py-0.5 rounded text-[11px] text-slate-300 border border-slate-700/60">Esc: Restore Zoom</span>
         </div>
         <div className="text-slate-500 font-medium">
-          MRA Corporate Planning & Finance &copy; 2026. PostgreSQL Live Sync Active.
+          MRA Corporate Planning & Finance &copy; 2026. Confidential Presentation.
         </div>
       </footer>
     </div>
