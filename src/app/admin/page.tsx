@@ -298,154 +298,16 @@ export default function AdminPage() {
         />
 
         {/* Dynamic Tab Body */}
-        <div className="p-6 max-w-7xl mx-auto w-full space-y-6">
-
-          {/* Quick Scenario Banner */}
-          <div className={`rounded-2xl p-4 flex flex-wrap items-center justify-between gap-4 border transition-all ${cardBg}`}>
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-xl bg-blue-500/10 text-blue-500 border border-blue-500/20">
-                <Sparkles size={16} />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h2 className={`text-sm font-bold ${isLightMode ? 'text-slate-900' : 'text-white'}`}>{dataset.title}</h2>
-                  <span className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-semibold px-2 py-0.5 rounded border border-emerald-500/20">
-                    Active Deck
-                  </span>
-                </div>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <span className="text-xs text-slate-400 font-mono" suppressHydrationWarning>
-                    URL: {presentationUrl}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleCopyLink}
-                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all active:scale-95 ${
-                  isLightMode
-                    ? 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
-                    : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
-                }`}
-              >
-                {copiedLink ? <Check size={13} className="text-emerald-500" /> : <Copy size={13} />}
-                {copiedLink ? 'Copied' : 'Copy Link'}
-              </button>
-              <button
-                onClick={() => router.push(`/p/${activeScenarioSlug}`)}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-all shadow-md shadow-blue-600/30 active:scale-95"
-              >
-                <ExternalLink size={13} />
-                Open Presentation Deck
-              </button>
-            </div>
-          </div>
+        <div className="p-5 max-w-[1700px] mx-auto w-full space-y-5">
 
           {/* TAB 1: P&L CONSOLIDATION GRID */}
           {activeTab === 'grid' && (
-            <div className="space-y-6">
-              {/* Scenario Settings / Creation 2-Column Cards */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-                {/* 1. Active Scenario Settings */}
-                <div className={`rounded-2xl p-5 flex flex-col justify-between border transition-all ${cardBg}`}>
-                  <div>
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2.5 flex items-center gap-1.5">
-                      <Edit3 className="w-4 h-4 text-amber-500" />
-                      Active Scenario Details
-                    </h3>
-                    <div className="space-y-2.5">
-                      <div>
-                        <label className="text-[11px] font-semibold text-slate-400">Scenario Title</label>
-                        <input
-                          type="text"
-                          value={scenarioTitle}
-                          onChange={(e) => setScenarioTitle(e.target.value)}
-                          className={`w-full text-xs rounded-lg border px-3 py-2 font-medium outline-none transition-colors ${inputBg}`}
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[11px] font-semibold text-slate-400">Scenario Identifier</label>
-                        <div className={`text-xs px-3 py-2 rounded-lg font-mono flex items-center gap-2 border ${
-                          isLightMode ? 'bg-slate-50 border-slate-200 text-slate-700' : 'bg-slate-900/80 border-slate-700/80 text-emerald-400'
-                        }`}>
-                          <CheckCircle size={13} className="text-emerald-500" />
-                          <span>/p/{activeScenarioSlug} (Live Synchronized)</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mt-4">
-                    <button
-                      onClick={handleUpdateCurrent}
-                      disabled={isSaving}
-                      className="w-full text-xs font-semibold py-2 px-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white flex items-center justify-center gap-1.5 transition-all shadow-md shadow-blue-600/20 active:scale-95"
-                    >
-                      <Save className="w-3.5 h-3.5" />
-                      {isSaving ? 'Updating...' : 'Save Changes to Current Scenario'}
-                    </button>
-                  </div>
-                </div>
-
-                {/* 2. Publish New Unique Link */}
-                <div className={`rounded-2xl p-5 flex flex-col justify-between border transition-all ${cardBg}`}>
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <h3 className="text-xs font-bold uppercase tracking-wider text-emerald-500 flex items-center gap-1.5">
-                        <Sparkles className="w-4 h-4 text-emerald-500" />
-                        Publish New Unique Link
-                      </h3>
-                      <span className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-semibold px-2 py-0.5 rounded border border-emerald-500/20">
-                        New URL
-                      </span>
-                    </div>
-                    <p className="text-xs text-slate-400 mb-2">
-                      Modified figures? Create a new separate URL without overwriting previous decks.
-                    </p>
-                    <div>
-                      <label className="text-[11px] font-semibold text-slate-400">Slug Identifier (/p/[slug])</label>
-                      <div className="flex items-center mt-1">
-                        <span className={`text-xs px-3 py-2 rounded-l-lg border border-r-0 font-mono ${
-                          isLightMode ? 'bg-slate-100 border-slate-300 text-slate-500' : 'bg-slate-900 border-slate-700 text-slate-500'
-                        }`}>
-                          /p/
-                        </span>
-                        <input
-                          type="text"
-                          placeholder="e.g. mra-scenario-optimistic-2027"
-                          value={newSlug}
-                          onChange={(e) => setNewSlug(e.target.value)}
-                          className={`w-full text-xs rounded-r-lg border px-3 py-2 focus:border-emerald-500 outline-none font-mono ${inputBg}`}
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mt-4 space-y-2">
-                    <button
-                      onClick={handleSaveAsNew}
-                      disabled={isSaving}
-                      className="w-full text-xs font-semibold py-2 px-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white flex items-center justify-center gap-1.5 transition-all shadow-md shadow-emerald-600/20 active:scale-95"
-                    >
-                      <PlusCircle className="w-3.5 h-3.5" />
-                      {isSaving ? 'Publishing...' : 'Publish as New Scenario Link'}
-                    </button>
-                    {saveSuccess && (
-                      <div className="text-[11px] text-emerald-500 flex items-center justify-center gap-1 font-medium animate-pulse">
-                        <CheckCircle2 className="w-3.5 h-3.5" /> Scenario saved successfully!
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
+            <div className="space-y-4">
               {/* In-Browser Interactive Spreadsheet Grid */}
               <div className={`rounded-2xl p-5 border transition-all ${cardBg}`}>
-                <div className="flex items-center justify-between mb-4">
+                <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
                   <div>
-                    <h3 className={`text-sm font-bold flex items-center gap-2 ${isLightMode ? 'text-slate-900' : 'text-white'}`}>
+                    <h3 className={`text-base font-bold flex items-center gap-2 ${isLightMode ? 'text-slate-900' : 'text-white'}`}>
                       In-Browser Spreadsheet Grid: PL MRA Group+Holding (Combine)
                       <span className="text-[10px] bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded-full font-semibold border border-emerald-500/30">
                         Live Recalculate Active
@@ -455,9 +317,38 @@ export default function AdminPage() {
                       Click on any numeric cell to edit. GP, OPEX, EBITDA, and NPAT auto-recalculate in real-time. (IDR Billion).
                     </p>
                   </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={handleCopyLink}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all active:scale-95 ${
+                        isLightMode
+                          ? 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
+                          : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
+                      }`}
+                    >
+                      {copiedLink ? <Check size={13} className="text-emerald-500" /> : <Copy size={13} />}
+                      {copiedLink ? 'Copied' : 'Copy Link'}
+                    </button>
+                    <button
+                      onClick={handleUpdateCurrent}
+                      disabled={isSaving}
+                      className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-all shadow-sm active:scale-95 disabled:opacity-50 cursor-pointer"
+                    >
+                      <Save size={13} />
+                      {isSaving ? 'Saving...' : 'Save Changes'}
+                    </button>
+                    <button
+                      onClick={() => router.push(`/p/${activeScenarioSlug}`)}
+                      className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white transition-all shadow-sm active:scale-95 cursor-pointer"
+                    >
+                      <ExternalLink size={13} />
+                      Open Presentation Deck
+                    </button>
+                  </div>
                 </div>
 
-                <div className={`overflow-x-auto border rounded-xl max-h-[550px] shadow-inner ${isLightMode ? 'border-slate-200' : 'border-slate-800'}`}>
+                <div className={`overflow-x-auto border rounded-xl shadow-sm ${isLightMode ? 'border-slate-200' : 'border-slate-800'}`}>
                   <table className="w-full text-xs text-left border-collapse">
                     <thead className={`${tableHeaderBg} sticky top-0 z-20 shadow`}>
                       <tr>
@@ -855,6 +746,101 @@ export default function AdminPage() {
           {/* TAB 3: SCENARIO MANAGER */}
           {activeTab === 'scenarios' && (
             <div className="space-y-6">
+              {/* Scenario Settings / Creation 2-Column Cards */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                {/* 1. Active Scenario Settings */}
+                <div className={`rounded-2xl p-5 flex flex-col justify-between border transition-all ${cardBg}`}>
+                  <div>
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2.5 flex items-center gap-1.5">
+                      <Edit3 className="w-4 h-4 text-amber-500" />
+                      Active Scenario Details
+                    </h3>
+                    <div className="space-y-2.5">
+                      <div>
+                        <label className="text-[11px] font-semibold text-slate-400">Scenario Title</label>
+                        <input
+                          type="text"
+                          value={scenarioTitle}
+                          onChange={(e) => setScenarioTitle(e.target.value)}
+                          className={`w-full text-xs rounded-lg border px-3 py-2 font-medium outline-none transition-colors ${inputBg}`}
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[11px] font-semibold text-slate-400">Scenario Identifier</label>
+                        <div className={`text-xs px-3 py-2 rounded-lg font-mono flex items-center gap-2 border ${
+                          isLightMode ? 'bg-slate-50 border-slate-200 text-slate-700' : 'bg-slate-900/80 border-slate-700/80 text-emerald-400'
+                        }`}>
+                          <CheckCircle size={13} className="text-emerald-500" />
+                          <span>/p/{activeScenarioSlug} (Live Synchronized)</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-4">
+                    <button
+                      onClick={handleUpdateCurrent}
+                      disabled={isSaving}
+                      className="w-full text-xs font-semibold py-2 px-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white flex items-center justify-center gap-1.5 transition-all shadow-md shadow-blue-600/20 active:scale-95"
+                    >
+                      <Save className="w-3.5 h-3.5" />
+                      {isSaving ? 'Updating...' : 'Save Changes to Current Scenario'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* 2. Publish New Unique Link */}
+                <div className={`rounded-2xl p-5 flex flex-col justify-between border transition-all ${cardBg}`}>
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className="text-xs font-bold uppercase tracking-wider text-emerald-500 flex items-center gap-1.5">
+                        <Sparkles className="w-4 h-4 text-emerald-500" />
+                        Publish New Unique Link
+                      </h3>
+                      <span className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-semibold px-2 py-0.5 rounded border border-emerald-500/20">
+                        New URL
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-400 mb-2">
+                      Modified figures? Create a new separate URL without overwriting previous decks.
+                    </p>
+                    <div>
+                      <label className="text-[11px] font-semibold text-slate-400">Slug Identifier (/p/[slug])</label>
+                      <div className="flex items-center mt-1">
+                        <span className={`text-xs px-3 py-2 rounded-l-lg border border-r-0 font-mono ${
+                          isLightMode ? 'bg-slate-100 border-slate-300 text-slate-500' : 'bg-slate-900 border-slate-700 text-slate-500'
+                        }`}>
+                          /p/
+                        </span>
+                        <input
+                          type="text"
+                          placeholder="e.g. mra-scenario-optimistic-2027"
+                          value={newSlug}
+                          onChange={(e) => setNewSlug(e.target.value)}
+                          className={`w-full text-xs rounded-r-lg border px-3 py-2 focus:border-emerald-500 outline-none font-mono ${inputBg}`}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 space-y-2">
+                    <button
+                      onClick={handleSaveAsNew}
+                      disabled={isSaving}
+                      className="w-full text-xs font-semibold py-2 px-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white flex items-center justify-center gap-1.5 transition-all shadow-md shadow-emerald-600/20 active:scale-95"
+                    >
+                      <PlusCircle className="w-3.5 h-3.5" />
+                      {isSaving ? 'Publishing...' : 'Publish as New Scenario Link'}
+                    </button>
+                    {saveSuccess && (
+                      <div className="text-[11px] text-emerald-500 flex items-center justify-center gap-1 font-medium animate-pulse">
+                        <CheckCircle2 className="w-3.5 h-3.5" /> Scenario saved successfully!
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
               <div className={`rounded-2xl p-5 border transition-all ${cardBg}`}>
                 <div className="flex items-center justify-between mb-4">
                   <div>
