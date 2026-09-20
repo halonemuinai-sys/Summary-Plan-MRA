@@ -6,7 +6,7 @@ import { INITIAL_HIGHLIGHTS_DATA } from './highlights-data';
 export async function getAllScenarios(): Promise<ScenarioDataset[]> {
   try {
     const res = await pool.query(
-      'SELECT id, slug, title, description, years, items, brand_breakdown, is_locked, created_at, updated_at FROM scenarios ORDER BY updated_at DESC'
+      'SELECT id, slug, title, description, years, items, brand_breakdown, is_locked, created_at, updated_at FROM mra.scenarios ORDER BY updated_at DESC'
     );
 
     if (res.rows.length === 0) {
@@ -36,7 +36,7 @@ export async function getAllScenarios(): Promise<ScenarioDataset[]> {
 export async function getScenarioBySlug(slug: string): Promise<ScenarioDataset> {
   try {
     const res = await pool.query(
-      'SELECT id, slug, title, description, years, items, brand_breakdown, is_locked, created_at, updated_at FROM scenarios WHERE slug = $1 LIMIT 1',
+      'SELECT id, slug, title, description, years, items, brand_breakdown, is_locked, created_at, updated_at FROM mra.scenarios WHERE slug = $1 LIMIT 1',
       [slug]
     );
 
@@ -67,7 +67,7 @@ export async function saveScenario(dataset: ScenarioDataset): Promise<ScenarioDa
   try {
     const now = new Date();
     await pool.query(
-      `INSERT INTO scenarios (id, slug, title, description, years, items, brand_breakdown, is_locked, updated_at)
+      `INSERT INTO mra.scenarios (id, slug, title, description, years, items, brand_breakdown, is_locked, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        ON CONFLICT (slug) DO UPDATE SET
          title = EXCLUDED.title,
@@ -100,7 +100,7 @@ export async function saveScenario(dataset: ScenarioDataset): Promise<ScenarioDa
 export async function getFinancialHighlights(): Promise<FinancialHighlightsData> {
   try {
     const res = await pool.query(
-      'SELECT data FROM financial_highlights WHERE id = $1 LIMIT 1',
+      'SELECT data FROM mra.financial_highlights WHERE id = $1 LIMIT 1',
       ['main']
     );
     if (res.rows.length > 0 && res.rows[0].data) {
@@ -117,7 +117,7 @@ export async function saveFinancialHighlights(
 ): Promise<FinancialHighlightsData> {
   try {
     await pool.query(
-      `INSERT INTO financial_highlights (id, data, updated_at)
+      `INSERT INTO mra.financial_highlights (id, data, updated_at)
        VALUES ($1, $2, NOW())
        ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, updated_at = NOW()`,
       ['main', JSON.stringify(data)]
