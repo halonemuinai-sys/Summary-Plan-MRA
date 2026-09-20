@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Save, RotateCcw, ExternalLink, Sparkles, CheckCircle2,
@@ -10,6 +10,42 @@ import {
 import confetti from 'canvas-confetti';
 import { FinancialHighlightsData } from '@/lib/types';
 import { INITIAL_HIGHLIGHTS_DATA } from '@/lib/highlights-data';
+import { useEditHistory } from '@/lib/use-edit-history';
+import { formatForEdit, parseNumberInput } from '@/lib/number-format';
+import HighlightsMatrix from './HighlightsMatrix';
+import { EditHistoryButtons } from './EditToolbar';
+
+/**
+ * A number field that reads what the person typed with the same parser as the grids, so a decimal
+ * comma works as well as a decimal point. A plain <input type="number"> rejects one of the two
+ * depending on the browser's locale, and hands back an empty value that would be stored as zero.
+ */
+function NumberInput({ value, onCommit, className }: { value: number; onCommit: (value: number) => void; className?: string }) {
+  const [text, setText] = useState(() => formatForEdit(value));
+  const isFocused = useRef(false);
+
+  useEffect(() => {
+    if (!isFocused.current) setText(formatForEdit(value));
+  }, [value]);
+
+  return (
+    <input
+      type="text"
+      inputMode="decimal"
+      className={className}
+      value={text}
+      onFocus={() => { isFocused.current = true; }}
+      onChange={(event) => setText(event.target.value)}
+      onBlur={() => {
+        isFocused.current = false;
+        const parsed = parseNumberInput(text);
+        // Text that is not a number puts the old figure back rather than storing a zero
+        if (parsed === null) setText(formatForEdit(value));
+        else { onCommit(parsed); setText(formatForEdit(parsed)); }
+      }}
+    />
+  );
+}
 
 interface HighlightsStudioProps {
   isLightMode?: boolean;
@@ -22,6 +58,20 @@ export default function HighlightsStudio({ isLightMode = true }: HighlightsStudi
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [loading, setLoading] = useState(true);
 
+  // Undo/redo for the figures typed into the grids. Plain text fields keep the browser's own undo.
+  const { push, undo, redo, clear: clearHistory, canUndo, canRedo } = useEditHistory<FinancialHighlightsData>();
+  const dataRef = useRef(highlightsData);
+  dataRef.current = highlightsData;
+  const rememberBeforeEdit = () => push(dataRef.current);
+  const onUndo = useCallback(() => {
+    const previous = undo(dataRef.current);
+    if (previous) setHighlightsData(previous);
+  }, [undo]);
+  const onRedo = useCallback(() => {
+    const next = redo(dataRef.current);
+    if (next) setHighlightsData(next);
+  }, [redo]);
+
   // Fetch saved highlights on mount
   useEffect(() => {
     async function load() {
@@ -32,6 +82,7 @@ export default function HighlightsStudio({ isLightMode = true }: HighlightsStudi
           const json = await res.json();
           if (json.data) {
             setHighlightsData(json.data);
+            clearHistory();
           }
         }
       } catch (e) {
@@ -77,6 +128,7 @@ export default function HighlightsStudio({ isLightMode = true }: HighlightsStudi
   const handleReset = () => {
     if (confirm('Reset all values to Slide 1 baseline figures?')) {
       setHighlightsData(INITIAL_HIGHLIGHTS_DATA);
+      clearHistory();
     }
   };
 
@@ -95,6 +147,7 @@ export default function HighlightsStudio({ isLightMode = true }: HighlightsStudi
   };
 
   const updateRevenuePoint = (year: string, value: number) => {
+    rememberBeforeEdit();
     setHighlightsData((prev) => ({
       ...prev,
       revenueTrajectory: prev.revenueTrajectory.map((pt) =>
@@ -104,6 +157,7 @@ export default function HighlightsStudio({ isLightMode = true }: HighlightsStudi
   };
 
   const toggleRevenueForecast = (year: string) => {
+    rememberBeforeEdit();
     setHighlightsData((prev) => ({
       ...prev,
       revenueTrajectory: prev.revenueTrajectory.map((pt) =>
@@ -117,6 +171,7 @@ export default function HighlightsStudio({ isLightMode = true }: HighlightsStudi
     field: 'gp' | 'ebitda' | 'ebit' | 'eat',
     value: number
   ) => {
+    rememberBeforeEdit();
     setHighlightsData((prev) => ({
       ...prev,
       pnlTrajectory: prev.pnlTrajectory.map((pt) =>
@@ -130,6 +185,7 @@ export default function HighlightsStudio({ isLightMode = true }: HighlightsStudi
     field: 'gpm' | 'ebitdam' | 'ebitm' | 'eatm',
     value: number
   ) => {
+    rememberBeforeEdit();
     setHighlightsData((prev) => ({
       ...prev,
       marginsTrajectory: prev.marginsTrajectory.map((pt) =>
@@ -143,6 +199,7 @@ export default function HighlightsStudio({ isLightMode = true }: HighlightsStudi
     field: 'cfo' | 'cfi' | 'cff',
     value: number
   ) => {
+    rememberBeforeEdit();
     setHighlightsData((prev) => ({
       ...prev,
       cashflowTrajectory: prev.cashflowTrajectory.map((pt) =>
@@ -178,13 +235,20 @@ export default function HighlightsStudio({ isLightMode = true }: HighlightsStudi
                   Financial Highlights Deck Studio
                 </h2>
                 <p className="text-xs text-slate-400">
-                  Slide 1 Editor: FY22–FY30F KPI Cards & 4-Quadrant Trajectories (Saved to PostgreSQL).
+                  Edit the numbers behind the Highlights slide.
                 </p>
               </div>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5">
+            <EditHistoryButtons
+              canUndo={canUndo}
+              canRedo={canRedo}
+              onUndo={onUndo}
+              onRedo={onRedo}
+              isLightMode={isLightMode}
+            />
             <button
               onClick={handleReset}
               className={`flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-xl border transition-all cursor-pointer ${
@@ -204,7 +268,7 @@ export default function HighlightsStudio({ isLightMode = true }: HighlightsStudi
               className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-500 text-white shadow-md shadow-blue-600/30 transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
             >
               <Save size={14} />
-              {isSaving ? 'Saving to DB...' : 'Save Highlights to DB'}
+              {isSaving ? 'Saving to DB...' : 'Save Highlights'}
             </button>
 
             <button
@@ -249,21 +313,18 @@ export default function HighlightsStudio({ isLightMode = true }: HighlightsStudi
             <div className="space-y-2">
               <div>
                 <label className="text-[10px] text-slate-400 font-semibold">Value (IDR Bn)</label>
-                <input
-                  type="number"
+                <NumberInput
                   value={highlightsData.kpis.revenue.value}
-                  onChange={(e) => updateKpi('revenue', 'value', parseFloat(e.target.value) || 0)}
+                  onCommit={(next) => updateKpi('revenue', 'value', next)}
                   className={`w-full text-xs rounded-lg border px-2.5 py-1.5 font-bold outline-none ${inputBg}`}
                 />
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="text-[10px] text-slate-400 font-semibold">YoY %</label>
-                  <input
-                    type="number"
-                    step="0.1"
+                  <NumberInput
                     value={highlightsData.kpis.revenue.yoyPct}
-                    onChange={(e) => updateKpi('revenue', 'yoyPct', parseFloat(e.target.value) || 0)}
+                    onCommit={(next) => updateKpi('revenue', 'yoyPct', next)}
                     className={`w-full text-xs rounded-lg border px-2.5 py-1.5 font-semibold text-emerald-500 outline-none ${inputBg}`}
                   />
                 </div>
@@ -289,21 +350,18 @@ export default function HighlightsStudio({ isLightMode = true }: HighlightsStudi
             <div className="space-y-2">
               <div>
                 <label className="text-[10px] text-slate-400 font-semibold">Value (IDR Bn)</label>
-                <input
-                  type="number"
+                <NumberInput
                   value={highlightsData.kpis.ebitda.value}
-                  onChange={(e) => updateKpi('ebitda', 'value', parseFloat(e.target.value) || 0)}
+                  onCommit={(next) => updateKpi('ebitda', 'value', next)}
                   className={`w-full text-xs rounded-lg border px-2.5 py-1.5 font-bold outline-none ${inputBg}`}
                 />
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="text-[10px] text-slate-400 font-semibold">YoY %</label>
-                  <input
-                    type="number"
-                    step="0.1"
+                  <NumberInput
                     value={highlightsData.kpis.ebitda.yoyPct}
-                    onChange={(e) => updateKpi('ebitda', 'yoyPct', parseFloat(e.target.value) || 0)}
+                    onCommit={(next) => updateKpi('ebitda', 'yoyPct', next)}
                     className={`w-full text-xs rounded-lg border px-2.5 py-1.5 font-semibold text-emerald-500 outline-none ${inputBg}`}
                   />
                 </div>
@@ -329,21 +387,18 @@ export default function HighlightsStudio({ isLightMode = true }: HighlightsStudi
             <div className="space-y-2">
               <div>
                 <label className="text-[10px] text-slate-400 font-semibold">Value (IDR Bn)</label>
-                <input
-                  type="number"
+                <NumberInput
                   value={highlightsData.kpis.eat.value}
-                  onChange={(e) => updateKpi('eat', 'value', parseFloat(e.target.value) || 0)}
+                  onCommit={(next) => updateKpi('eat', 'value', next)}
                   className={`w-full text-xs rounded-lg border px-2.5 py-1.5 font-bold outline-none ${inputBg}`}
                 />
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="text-[10px] text-slate-400 font-semibold">YoY %</label>
-                  <input
-                    type="number"
-                    step="0.1"
+                  <NumberInput
                     value={highlightsData.kpis.eat.yoyPct}
-                    onChange={(e) => updateKpi('eat', 'yoyPct', parseFloat(e.target.value) || 0)}
+                    onCommit={(next) => updateKpi('eat', 'yoyPct', next)}
                     className={`w-full text-xs rounded-lg border px-2.5 py-1.5 font-semibold text-emerald-500 outline-none ${inputBg}`}
                   />
                 </div>
@@ -369,22 +424,18 @@ export default function HighlightsStudio({ isLightMode = true }: HighlightsStudi
             <div className="space-y-2">
               <div>
                 <label className="text-[10px] text-slate-400 font-semibold">Value (%)</label>
-                <input
-                  type="number"
-                  step="0.1"
+                <NumberInput
                   value={highlightsData.kpis.gpm.value}
-                  onChange={(e) => updateKpi('gpm', 'value', parseFloat(e.target.value) || 0)}
+                  onCommit={(next) => updateKpi('gpm', 'value', next)}
                   className={`w-full text-xs rounded-lg border px-2.5 py-1.5 font-bold outline-none ${inputBg}`}
                 />
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="text-[10px] text-slate-400 font-semibold">YoY Diff (%)</label>
-                  <input
-                    type="number"
-                    step="0.1"
+                  <NumberInput
                     value={highlightsData.kpis.gpm.yoyDiff}
-                    onChange={(e) => updateKpi('gpm', 'yoyDiff', parseFloat(e.target.value) || 0)}
+                    onCommit={(next) => updateKpi('gpm', 'yoyDiff', next)}
                     className={`w-full text-xs rounded-lg border px-2.5 py-1.5 font-semibold outline-none ${inputBg}`}
                   />
                 </div>
@@ -403,362 +454,107 @@ export default function HighlightsStudio({ isLightMode = true }: HighlightsStudi
         </div>
       </div>
 
-      {/* 2. QUADRANT 1: REVENUE TRAJECTORY */}
+      {/* Revenue Trajectory */}
       <div className={`rounded-2xl p-5 border transition-all ${cardBg}`}>
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
           <div>
             <h3 className={`text-sm font-bold flex items-center gap-2 ${isLightMode ? 'text-slate-900' : 'text-white'}`}>
               <BarChart3 className="w-4 h-4 text-emerald-500" />
-              Quadrant 1: Revenue Trajectory (FY22 – FY30F in IDR Bn)
+              Revenue Trajectory
             </h3>
-            <p className="text-xs text-slate-400 mt-0.5">
-              Actual years render solid green; forecast years render diagonal striped green on the deck.
-            </p>
+            <p className="text-xs text-slate-400 mt-0.5">Years marked Actual are drawn solid on the slide; Forecast years are drawn hatched.</p>
           </div>
         </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs border-collapse">
-            <thead>
-              <tr className={`border-b ${tableHeaderBg}`}>
-                <th className="p-3 text-left font-bold uppercase tracking-wider">Period</th>
-                {highlightsData.revenueTrajectory.map((pt) => (
-                  <th key={pt.year} className="p-3 text-center font-bold">
-                    {pt.year}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              <tr className="border-b border-slate-800/40">
-                <td className="p-3 font-semibold text-slate-400">Type</td>
-                {highlightsData.revenueTrajectory.map((pt) => (
-                  <td key={pt.year} className="p-2 text-center">
-                    <button
-                      onClick={() => toggleRevenueForecast(pt.year)}
-                      className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-colors cursor-pointer ${
-                        pt.isForecast
-                          ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30'
-                          : 'bg-blue-500/10 text-blue-400 border-blue-500/30'
-                      }`}
-                      title="Click to toggle Actual / Forecast"
-                    >
-                      {pt.isForecast ? 'Forecast' : 'Actual'}
-                    </button>
-                  </td>
-                ))}
-              </tr>
-              <tr>
-                <td className="p-3 font-bold text-slate-200">Revenue (IDR Bn)</td>
-                {highlightsData.revenueTrajectory.map((pt) => (
-                  <td key={pt.year} className="p-2 text-center">
-                    <input
-                      type="number"
-                      value={pt.value}
-                      onChange={(e) => updateRevenuePoint(pt.year, parseFloat(e.target.value) || 0)}
-                      className={`w-20 text-center font-bold text-xs rounded-lg border py-1.5 outline-none ${cellInputBg}`}
-                    />
-                  </td>
-                ))}
-              </tr>
-            </tbody>
-          </table>
-        </div>
+        <HighlightsMatrix
+          rows={[{ field: 'value', label: 'Revenue' }]}
+          points={highlightsData.revenueTrajectory}
+          caption="IDR Billion"
+          isLightMode={isLightMode}
+          onEdit={(field, year, value) => updateRevenuePoint(year, value)}
+          onToggleForecast={toggleRevenueForecast}
+          onUndo={onUndo}
+          onRedo={onRedo}
+        />
       </div>
 
-      {/* 3. QUADRANT 2: P&L TRAJECTORY MATRIX */}
+      {/* Gross Profit, EBITDA and Net Profit */}
       <div className={`rounded-2xl p-5 border transition-all ${cardBg}`}>
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
           <div>
             <h3 className={`text-sm font-bold flex items-center gap-2 ${isLightMode ? 'text-slate-900' : 'text-white'}`}>
-              <Coins className="w-4 h-4 text-emerald-500" />
-              Quadrant 2: P&L Trajectory Matrix (GP, EBITDA, EBIT, EAT in IDR Bn)
+              <BarChart3 className="w-4 h-4 text-emerald-500" />
+              Gross Profit, EBITDA and Net Profit
             </h3>
-            <p className="text-xs text-slate-400 mt-0.5">
-              Clustered bar chart values representing Gross Profit, EBITDA, Operating Profit, and Net Profit.
-            </p>
+            <p className="text-xs text-slate-400 mt-0.5">The four bars shown for each year on the slide.</p>
           </div>
         </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs border-collapse">
-            <thead>
-              <tr className={`border-b ${tableHeaderBg}`}>
-                <th className="p-3 text-left font-bold uppercase tracking-wider min-w-[180px]">P&L Line Item</th>
-                {highlightsData.pnlTrajectory.map((pt) => (
-                  <th key={pt.year} className="p-3 text-center font-bold min-w-[85px]">
-                    {pt.year}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800/40">
-              {/* GP */}
-              <tr>
-                <td className="p-3 font-bold text-emerald-400 flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-sm bg-[#10B981] inline-block" />
-                  Gross Profit (GP)
-                </td>
-                {highlightsData.pnlTrajectory.map((pt) => (
-                  <td key={pt.year} className="p-2 text-center">
-                    <input
-                      type="number"
-                      value={pt.gp}
-                      onChange={(e) => updatePnlPoint(pt.year, 'gp', parseFloat(e.target.value) || 0)}
-                      className={`w-18 text-center font-semibold text-xs rounded-lg border py-1.5 outline-none ${cellInputBg}`}
-                    />
-                  </td>
-                ))}
-              </tr>
-
-              {/* EBITDA */}
-              <tr>
-                <td className="p-3 font-bold text-teal-400 flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-sm bg-[#14B8A6] inline-block" />
-                  EBITDA
-                </td>
-                {highlightsData.pnlTrajectory.map((pt) => (
-                  <td key={pt.year} className="p-2 text-center">
-                    <input
-                      type="number"
-                      value={pt.ebitda}
-                      onChange={(e) => updatePnlPoint(pt.year, 'ebitda', parseFloat(e.target.value) || 0)}
-                      className={`w-18 text-center font-semibold text-xs rounded-lg border py-1.5 outline-none ${cellInputBg}`}
-                    />
-                  </td>
-                ))}
-              </tr>
-
-              {/* EBIT */}
-              <tr>
-                <td className="p-3 font-bold text-amber-400 flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-sm bg-[#F59E0B] inline-block" />
-                  Operating Profit (EBIT)
-                </td>
-                {highlightsData.pnlTrajectory.map((pt) => (
-                  <td key={pt.year} className="p-2 text-center">
-                    <input
-                      type="number"
-                      value={pt.ebit}
-                      onChange={(e) => updatePnlPoint(pt.year, 'ebit', parseFloat(e.target.value) || 0)}
-                      className={`w-18 text-center font-semibold text-xs rounded-lg border py-1.5 outline-none ${cellInputBg}`}
-                    />
-                  </td>
-                ))}
-              </tr>
-
-              {/* EAT */}
-              <tr>
-                <td className="p-3 font-bold text-indigo-400 flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-sm bg-[#6366F1] inline-block" />
-                  Net Profit (EAT)
-                </td>
-                {highlightsData.pnlTrajectory.map((pt) => (
-                  <td key={pt.year} className="p-2 text-center">
-                    <input
-                      type="number"
-                      value={pt.eat}
-                      onChange={(e) => updatePnlPoint(pt.year, 'eat', parseFloat(e.target.value) || 0)}
-                      className={`w-18 text-center font-semibold text-xs rounded-lg border py-1.5 outline-none ${cellInputBg}`}
-                    />
-                  </td>
-                ))}
-              </tr>
-            </tbody>
-          </table>
-        </div>
+        <HighlightsMatrix
+          rows={[
+            { field: 'gp', label: 'Gross Profit' },
+            { field: 'ebitda', label: 'EBITDA' },
+            { field: 'ebit', label: 'EBIT' },
+            { field: 'eat', label: 'Net Profit (EAT)' },
+          ]}
+          points={highlightsData.pnlTrajectory}
+          caption="IDR Billion"
+          isLightMode={isLightMode}
+          onEdit={(field, year, value) => updatePnlPoint(year, field as 'gp' | 'ebitda' | 'ebit' | 'eat', value)}
+          onUndo={onUndo}
+          onRedo={onRedo}
+        />
       </div>
 
-      {/* 4. QUADRANT 3: MARGINS TRAJECTORY % */}
+      {/* Margins Trajectory */}
       <div className={`rounded-2xl p-5 border transition-all ${cardBg}`}>
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
           <div>
             <h3 className={`text-sm font-bold flex items-center gap-2 ${isLightMode ? 'text-slate-900' : 'text-white'}`}>
-              <TrendingUp className="w-4 h-4 text-emerald-500" />
-              Quadrant 3: Margins Trajectory Matrix (%)
+              <BarChart3 className="w-4 h-4 text-emerald-500" />
+              Margins Trajectory
             </h3>
-            <p className="text-xs text-slate-400 mt-0.5">
-              Multi-line trajectory percentages (Gross Profit Margin, EBITDA Margin, Operating Margin, Net Margin).
-            </p>
+            <p className="text-xs text-slate-400 mt-0.5">Each margin as a percentage of revenue.</p>
           </div>
         </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs border-collapse">
-            <thead>
-              <tr className={`border-b ${tableHeaderBg}`}>
-                <th className="p-3 text-left font-bold uppercase tracking-wider min-w-[180px]">Margin Metric (%)</th>
-                {highlightsData.marginsTrajectory.map((pt) => (
-                  <th key={pt.year} className="p-3 text-center font-bold min-w-[85px]">
-                    {pt.year}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800/40">
-              {/* GPM */}
-              <tr>
-                <td className="p-3 font-bold text-emerald-400 flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#10B981] inline-block" />
-                  GPM (%)
-                </td>
-                {highlightsData.marginsTrajectory.map((pt) => (
-                  <td key={pt.year} className="p-2 text-center">
-                    <input
-                      type="number"
-                      step="0.1"
-                      value={pt.gpm}
-                      onChange={(e) => updateMarginsPoint(pt.year, 'gpm', parseFloat(e.target.value) || 0)}
-                      className={`w-18 text-center font-semibold text-xs rounded-lg border py-1.5 outline-none ${cellInputBg}`}
-                    />
-                  </td>
-                ))}
-              </tr>
-
-              {/* EBITDAM */}
-              <tr>
-                <td className="p-3 font-bold text-teal-400 flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#14B8A6] inline-block" />
-                  EBITDAM (%)
-                </td>
-                {highlightsData.marginsTrajectory.map((pt) => (
-                  <td key={pt.year} className="p-2 text-center">
-                    <input
-                      type="number"
-                      step="0.1"
-                      value={pt.ebitdam}
-                      onChange={(e) => updateMarginsPoint(pt.year, 'ebitdam', parseFloat(e.target.value) || 0)}
-                      className={`w-18 text-center font-semibold text-xs rounded-lg border py-1.5 outline-none ${cellInputBg}`}
-                    />
-                  </td>
-                ))}
-              </tr>
-
-              {/* EBITM */}
-              <tr>
-                <td className="p-3 font-bold text-amber-400 flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#F59E0B] inline-block" />
-                  EBITM (%)
-                </td>
-                {highlightsData.marginsTrajectory.map((pt) => (
-                  <td key={pt.year} className="p-2 text-center">
-                    <input
-                      type="number"
-                      step="0.1"
-                      value={pt.ebitm}
-                      onChange={(e) => updateMarginsPoint(pt.year, 'ebitm', parseFloat(e.target.value) || 0)}
-                      className={`w-18 text-center font-semibold text-xs rounded-lg border py-1.5 outline-none ${cellInputBg}`}
-                    />
-                  </td>
-                ))}
-              </tr>
-
-              {/* EATM */}
-              <tr>
-                <td className="p-3 font-bold text-indigo-400 flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#6366F1] inline-block" />
-                  EATM (%)
-                </td>
-                {highlightsData.marginsTrajectory.map((pt) => (
-                  <td key={pt.year} className="p-2 text-center">
-                    <input
-                      type="number"
-                      step="0.1"
-                      value={pt.eatm}
-                      onChange={(e) => updateMarginsPoint(pt.year, 'eatm', parseFloat(e.target.value) || 0)}
-                      className={`w-18 text-center font-semibold text-xs rounded-lg border py-1.5 outline-none ${cellInputBg}`}
-                    />
-                  </td>
-                ))}
-              </tr>
-            </tbody>
-          </table>
-        </div>
+        <HighlightsMatrix
+          rows={[
+            { field: 'gpm', label: 'Gross Profit Margin', unit: 'pct' },
+            { field: 'ebitdam', label: 'EBITDA Margin', unit: 'pct' },
+            { field: 'ebitm', label: 'Operating Margin', unit: 'pct' },
+            { field: 'eatm', label: 'Net Margin', unit: 'pct' },
+          ]}
+          points={highlightsData.marginsTrajectory}
+          caption="Percent of revenue"
+          isLightMode={isLightMode}
+          onEdit={(field, year, value) => updateMarginsPoint(year, field as 'gpm' | 'ebitdam' | 'ebitm' | 'eatm', value)}
+          onUndo={onUndo}
+          onRedo={onRedo}
+        />
       </div>
 
-      {/* 5. QUADRANT 4: CASHFLOW TRAJECTORY */}
+      {/* Cashflow Trajectory */}
       <div className={`rounded-2xl p-5 border transition-all ${cardBg}`}>
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
           <div>
             <h3 className={`text-sm font-bold flex items-center gap-2 ${isLightMode ? 'text-slate-900' : 'text-white'}`}>
-              <Coins className="w-4 h-4 text-emerald-500" />
-              Quadrant 4: Cashflow Trajectory Matrix (CFO, CFI, CFF in IDR Bn)
+              <BarChart3 className="w-4 h-4 text-emerald-500" />
+              Cashflow Trajectory
             </h3>
-            <p className="text-xs text-slate-400 mt-0.5">
-              Cashflow movements across Operating (CFO), Investing (CFI), and Financing (CFF) activities.
-            </p>
+            <p className="text-xs text-slate-400 mt-0.5">Cash from operating, investing and financing activities. Negative figures are outflows.</p>
           </div>
         </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs border-collapse">
-            <thead>
-              <tr className={`border-b ${tableHeaderBg}`}>
-                <th className="p-3 text-left font-bold uppercase tracking-wider min-w-[180px]">Cashflow Type</th>
-                {highlightsData.cashflowTrajectory.map((pt) => (
-                  <th key={pt.year} className="p-3 text-center font-bold min-w-[85px]">
-                    {pt.year}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800/40">
-              {/* CFO */}
-              <tr>
-                <td className="p-3 font-bold text-emerald-400 flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-sm bg-[#10B981] inline-block" />
-                  CFO (Operations)
-                </td>
-                {highlightsData.cashflowTrajectory.map((pt) => (
-                  <td key={pt.year} className="p-2 text-center">
-                    <input
-                      type="number"
-                      value={pt.cfo}
-                      onChange={(e) => updateCashflowPoint(pt.year, 'cfo', parseFloat(e.target.value) || 0)}
-                      className={`w-18 text-center font-semibold text-xs rounded-lg border py-1.5 outline-none ${cellInputBg}`}
-                    />
-                  </td>
-                ))}
-              </tr>
-
-              {/* CFI */}
-              <tr>
-                <td className="p-3 font-bold text-rose-400 flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-sm bg-[#F43F5E] inline-block" />
-                  CFI (Investing)
-                </td>
-                {highlightsData.cashflowTrajectory.map((pt) => (
-                  <td key={pt.year} className="p-2 text-center">
-                    <input
-                      type="number"
-                      value={pt.cfi}
-                      onChange={(e) => updateCashflowPoint(pt.year, 'cfi', parseFloat(e.target.value) || 0)}
-                      className={`w-18 text-center font-semibold text-xs rounded-lg border py-1.5 outline-none ${cellInputBg}`}
-                    />
-                  </td>
-                ))}
-              </tr>
-
-              {/* CFF */}
-              <tr>
-                <td className="p-3 font-bold text-blue-400 flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-sm bg-[#3B82F6] inline-block" />
-                  CFF (Financing)
-                </td>
-                {highlightsData.cashflowTrajectory.map((pt) => (
-                  <td key={pt.year} className="p-2 text-center">
-                    <input
-                      type="number"
-                      value={pt.cff}
-                      onChange={(e) => updateCashflowPoint(pt.year, 'cff', parseFloat(e.target.value) || 0)}
-                      className={`w-18 text-center font-semibold text-xs rounded-lg border py-1.5 outline-none ${cellInputBg}`}
-                    />
-                  </td>
-                ))}
-              </tr>
-            </tbody>
-          </table>
-        </div>
+        <HighlightsMatrix
+          rows={[
+            { field: 'cfo', label: 'Operating (CFO)' },
+            { field: 'cfi', label: 'Investing (CFI)' },
+            { field: 'cff', label: 'Financing (CFF)' },
+          ]}
+          points={highlightsData.cashflowTrajectory}
+          caption="IDR Billion"
+          isLightMode={isLightMode}
+          onEdit={(field, year, value) => updateCashflowPoint(year, field as 'cfo' | 'cfi' | 'cff', value)}
+          onUndo={onUndo}
+          onRedo={onRedo}
+        />
       </div>
 
       {/* 6. SLIDE METADATA & FOOTERS */}

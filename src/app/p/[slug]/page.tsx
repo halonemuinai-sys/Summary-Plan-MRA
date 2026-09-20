@@ -2,11 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { motion, AnimatePresence } from 'framer-motion';
-import {
-  BarChart, Bar, LineChart, Line, AreaChart, Area,
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, ReferenceLine
-} from 'recharts';
+import CockpitCharts from '@/components/CockpitCharts';
 import {
   Maximize2, Minimize2, ArrowLeft, Share2,
   Check, RefreshCw, Sun, Moon, TrendingUp, DollarSign, Layers, Compass,
@@ -14,7 +10,6 @@ import {
 } from 'lucide-react';
 import { ScenarioDataset, BrandRowData } from '@/lib/types';
 import { INITIAL_DATASET, INITIAL_BRAND_BREAKDOWN } from '@/lib/initial-data';
-import { buildChartData } from '@/lib/formula-engine';
 
 export default function PresentationPage() {
   const params = useParams();
@@ -23,9 +18,7 @@ export default function PresentationPage() {
 
   const [dataset, setDataset] = useState<ScenarioDataset>(INITIAL_DATASET);
   const [loading, setLoading] = useState(true);
-  const [activeYearHover, setActiveYearHover] = useState<string | null>(null);
   const [zoomedQuadrant, setZoomedQuadrant] = useState<number | null>(null);
-  const [selectedWaterfallYear, setSelectedWaterfallYear] = useState('2026');
   const [unitMode, setUnitMode] = useState<'idrbn' | 'pct'>('idrbn');
   const [isCopied, setIsCopied] = useState(false);
   const [blackout, setBlackout] = useState(false);
@@ -54,9 +47,11 @@ export default function PresentationPage() {
   // Keyboard navigation & presentation hotkeys
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
+      if ((e.target as HTMLElement)?.closest('input, select, textarea, [contenteditable="true"]')) return;
       if (e.key === 'Escape') {
         if (zoomedQuadrant !== null) setZoomedQuadrant(null);
         if (blackout) setBlackout(false);
+        setShowBrandModal(false);
       } else if (e.key === 'f' || e.key === 'F') {
         if (!document.fullscreenElement) {
           document.documentElement.requestFullscreen().catch(() => {});
@@ -73,39 +68,12 @@ export default function PresentationPage() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [zoomedQuadrant, blackout]);
 
-  const chartYears = dataset.years.filter(y => parseInt(y) >= 2024);
-  const chartData = buildChartData(dataset.items, chartYears);
-
-  // Compute waterfall data for the selected year
-  const wfYear = selectedWaterfallYear;
-  const wfRev = dataset.items['total_revenue']?.values[wfYear] ?? 0;
-  const wfCogs = dataset.items['cogs']?.values[wfYear] ?? 0;
-  const wfGp = wfRev - wfCogs;
-  const wfPersonnel = dataset.items['personnel']?.values[wfYear] ?? 0;
-  const wfMarketing = dataset.items['marketing']?.values[wfYear] ?? 0;
-  const wfGa = dataset.items['ga_expenses']?.values[wfYear] ?? 0;
-  const wfOtherCost = dataset.items['other_expenses']?.values[wfYear] ?? 0;
-  const wfTax = dataset.items['income_tax']?.values[wfYear] ?? 0;
-  const wfNpat = dataset.items['npat']?.values[wfYear] ?? 0;
-
-  const waterfallData = [
-    { name: 'Gross Revenue', value: wfRev, fill: '#3B82F6', isTotal: true },
-    { name: '(-) COGS', value: -wfCogs, fill: '#F43F5E' },
-    { name: '(=) Gross Profit', value: wfGp, fill: '#059669', isTotal: true },
-    { name: '(-) Personnel', value: -wfPersonnel, fill: '#F59E0B' },
-    { name: '(-) G&A Exp', value: -wfGa, fill: '#F59E0B' },
-    { name: '(-) Marketing', value: -wfMarketing, fill: '#F59E0B' },
-    { name: '(-) Fin & Tax', value: -(wfOtherCost + wfTax), fill: '#EF4444' },
-    { name: '(=) Net Profit', value: wfNpat, fill: '#10B981', isTotal: true },
-  ];
-
   const handleCopyLink = () => {
     navigator.clipboard.writeText(window.location.href);
     setIsCopied(true);
     setTimeout(() => setIsCopied(false), 2500);
   };
 
-  const [q3View, setQ3View] = useState<'cost' | 'brand'>('cost');
   const [showBrandModal, setShowBrandModal] = useState(false);
   const [brandViewMode, setBrandViewMode] = useState<'bn' | 'full' | 'growth'>('bn');
 
@@ -159,7 +127,7 @@ export default function PresentationPage() {
   return (
     <div className={`min-h-screen ${bgClass} flex flex-col transition-colors duration-300 select-none overflow-x-hidden`}>
       {/* Top Glassmorphic Navigation Bar */}
-      <header className={`px-6 py-3 border-b flex items-center justify-between ${
+      <header className={`cockpit-toolbar px-6 py-3 border-b flex flex-wrap gap-3 items-center justify-between ${
         isLightMode ? 'border-slate-200 bg-white/90' : 'border-slate-800/80 bg-[#0B0F19]/90'
       } backdrop-blur-md sticky top-0 z-40`}>
         <div className="flex items-center gap-4">
@@ -174,6 +142,9 @@ export default function PresentationPage() {
             <ArrowLeft className="w-3.5 h-3.5" />
             Admin Studio
           </button>
+          <a href={`/p/${slug}/revenue`} className="text-xs font-semibold text-emerald-600 hover:underline">
+            Revenue Breakdown
+          </a>
           <div className="h-4 w-px bg-slate-700/60" />
           <div className="flex items-center gap-2.5">
             <span className="text-[11px] font-bold uppercase tracking-wider text-blue-400 bg-blue-500/10 px-2.5 py-0.5 rounded-full border border-blue-500/20 shadow-sm flex items-center gap-1">
@@ -195,7 +166,7 @@ export default function PresentationPage() {
               className={`px-3 py-1 rounded text-xs font-semibold transition-all ${
                 unitMode === 'idrbn' 
                   ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow' 
-                  : 'text-slate-400 hover:text-slate-200'
+                  : isLightMode ? 'text-slate-600 hover:text-slate-900' : 'text-slate-400 hover:text-slate-200'
               }`}
             >
               IDR Billion
@@ -205,7 +176,7 @@ export default function PresentationPage() {
               className={`px-3 py-1 rounded text-xs font-semibold transition-all ${
                 unitMode === 'pct' 
                   ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow' 
-                  : 'text-slate-400 hover:text-slate-200'
+                  : isLightMode ? 'text-slate-600 hover:text-slate-900' : 'text-slate-400 hover:text-slate-200'
               }`}
             >
               % of Sales
@@ -238,402 +209,10 @@ export default function PresentationPage() {
         </div>
       </header>
 
-      {/* Main 16:9 Presentation Canvas */}
-      <main className="flex-1 p-3 lg:p-5 flex flex-col justify-center">
-        <AnimatePresence mode="wait">
-          <motion.div
-            layout
-            className={`grid ${
-              zoomedQuadrant !== null ? 'grid-cols-1' : 'grid-cols-1 lg:grid-cols-2'
-            } gap-3.5 flex-1`}
-          >
-            {/* QUADRANT 1: REVENUE & NET PROFIT TRAJECTORY */}
-            {(zoomedQuadrant === null || zoomedQuadrant === 1) && (
-              <motion.div
-                layout
-                initial={{ opacity: 0, scale: 0.98 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.98 }}
-                transition={{ duration: 0.3 }}
-                className={`rounded-2xl border p-4 flex flex-col justify-between ${cardClass}`}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <span className="p-1.5 rounded-lg bg-blue-500/10 text-blue-400 border border-blue-500/20">
-                      <TrendingUp className="w-4 h-4" />
-                    </span>
-                    <div>
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-blue-400">
-                        Quadrant 1
-                      </span>
-                      <h3 className="text-sm font-bold tracking-tight">
-                        Revenue & Net Profit Trajectory (2024 - 2031)
-                      </h3>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="text-right hidden sm:block">
-                      <div className="text-xs font-bold text-blue-400">
-                        2031: {dataset.items['total_revenue']?.values['2031']} IDRbn
-                      </div>
-                      <div className="text-[10px] text-emerald-400 font-semibold">
-                        NPAT: {dataset.items['npat']?.values['2031']} IDRbn
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => setZoomedQuadrant(zoomedQuadrant === 1 ? null : 1)}
-                      className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-slate-300 transition-all hover:scale-105"
-                      title={zoomedQuadrant === 1 ? "Restore 4-Quadrant View (Esc)" : "Zoom Quadrant 1"}
-                    >
-                      {zoomedQuadrant === 1 ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-                    </button>
-                  </div>
-                </div>
-
-                <div className="flex-1 min-h-[220px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                      data={chartData}
-                      onMouseMove={(state) => {
-                        if (state?.activeLabel) setActiveYearHover(state.activeLabel);
-                      }}
-                      onMouseLeave={() => setActiveYearHover(null)}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" stroke={isLightMode ? "#E2E8F0" : "#1E293B"} vertical={false} />
-                      <XAxis dataKey="year" stroke={isLightMode ? "#64748B" : "#94A3B8"} fontSize={11} />
-                      <YAxis stroke={isLightMode ? "#64748B" : "#94A3B8"} fontSize={11} />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: isLightMode ? '#FFFFFF' : '#0F172A',
-                          borderColor: isLightMode ? '#CBD5E1' : '#334155',
-                          borderRadius: 10,
-                          fontSize: 12,
-                          boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.3)'
-                        }}
-                      />
-                      <Legend wrapperStyle={{ fontSize: 11 }} />
-                      <Bar
-                        dataKey="revenue"
-                        name="Total Revenue (IDRbn)"
-                        fill="#3B82F6"
-                        radius={[6, 6, 0, 0]}
-                        isAnimationActive={true}
-                        animationDuration={1200}
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="npat"
-                        name="Net Profit (IDRbn)"
-                        stroke="#10B981"
-                        strokeWidth={3}
-                        dot={{ r: 4, fill: '#10B981', strokeWidth: 2, stroke: '#FFFFFF' }}
-                        isAnimationActive={true}
-                        animationDuration={1500}
-                      />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </motion.div>
-            )}
-
-            {/* QUADRANT 2: EBITDA & MARGIN EXPANSION */}
-            {(zoomedQuadrant === null || zoomedQuadrant === 2) && (
-              <motion.div
-                layout
-                initial={{ opacity: 0, scale: 0.98 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.98 }}
-                transition={{ duration: 0.3 }}
-                className={`rounded-2xl border p-4 flex flex-col justify-between ${cardClass}`}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <span className="p-1.5 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                      <DollarSign className="w-4 h-4" />
-                    </span>
-                    <div>
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400">
-                        Quadrant 2
-                      </span>
-                      <h3 className="text-sm font-bold tracking-tight">
-                        EBITDA (After Holding Cost) & Margin Trajectory
-                      </h3>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="text-right hidden sm:block">
-                      <div className="text-xs font-bold text-amber-400">
-                        2031: {dataset.items['ebitda_after_holding']?.values['2031']} IDRbn
-                      </div>
-                      <div className="text-[10px] text-slate-400">
-                        Margin: {chartData[chartData.length - 1]?.ebitdaMargin}%
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => setZoomedQuadrant(zoomedQuadrant === 2 ? null : 2)}
-                      className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-slate-300 transition-all hover:scale-105"
-                      title={zoomedQuadrant === 2 ? "Restore 4-Quadrant View (Esc)" : "Zoom Quadrant 2"}
-                    >
-                      {zoomedQuadrant === 2 ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-                    </button>
-                  </div>
-                </div>
-
-                <div className="flex-1 min-h-[220px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={chartData}>
-                      <defs>
-                        <linearGradient id="ebitdaGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#F59E0B" stopOpacity={0.45} />
-                          <stop offset="95%" stopColor="#F59E0B" stopOpacity={0.0} />
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke={isLightMode ? "#E2E8F0" : "#1E293B"} vertical={false} />
-                      <XAxis dataKey="year" stroke={isLightMode ? "#64748B" : "#94A3B8"} fontSize={11} />
-                      <YAxis yAxisId="left" stroke={isLightMode ? "#64748B" : "#94A3B8"} fontSize={11} />
-                      <YAxis yAxisId="right" orientation="right" stroke="#F59E0B" fontSize={11} unit="%" />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: isLightMode ? '#FFFFFF' : '#0F172A',
-                          borderColor: isLightMode ? '#CBD5E1' : '#334155',
-                          borderRadius: 10,
-                          fontSize: 12,
-                        }}
-                      />
-                      <Legend wrapperStyle={{ fontSize: 11 }} />
-                      <Area
-                        yAxisId="left"
-                        type="monotone"
-                        dataKey="ebitda"
-                        name="EBITDA (IDRbn)"
-                        stroke="#F59E0B"
-                        strokeWidth={2.5}
-                        fill="url(#ebitdaGrad)"
-                        isAnimationActive={true}
-                        animationDuration={1300}
-                      />
-                      <Line
-                        yAxisId="right"
-                        type="monotone"
-                        dataKey="ebitdaMargin"
-                        name="EBITDA Margin %"
-                        stroke="#38BDF8"
-                        strokeWidth={2}
-                        strokeDasharray="4 4"
-                        dot={{ r: 3 }}
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-              </motion.div>
-            )}
-
-            {/* QUADRANT 3: COST STRUCTURE COMPOSITION OR BRAND PORTFOLIO */}
-            {(zoomedQuadrant === null || zoomedQuadrant === 3) && (
-              <motion.div
-                layout
-                initial={{ opacity: 0, scale: 0.98 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.98 }}
-                transition={{ duration: 0.3 }}
-                className={`rounded-2xl border p-4 flex flex-col justify-between ${cardClass}`}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <span className="p-1.5 rounded-lg bg-rose-500/10 text-rose-400 border border-rose-500/20">
-                      <Layers className="w-4 h-4" />
-                    </span>
-                    <div>
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-rose-400">
-                        Quadrant 3
-                      </span>
-                      <h3 className="text-sm font-bold tracking-tight">
-                        {q3View === 'cost' ? 'Cost Structure Evolution (COGS vs OPEX vs Margin)' : 'Brand Portfolio Trajectory (2026–2031)'}
-                      </h3>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    {/* View Switcher */}
-                    <div className={`flex rounded-lg border p-0.5 ${isLightMode ? 'bg-slate-100 border-slate-300' : 'bg-slate-900 border-slate-700'}`}>
-                      <button
-                        onClick={() => setQ3View('cost')}
-                        className={`px-2 py-0.5 rounded text-[11px] font-semibold transition-all ${
-                          q3View === 'cost'
-                            ? 'bg-blue-600 text-white shadow'
-                            : 'text-slate-400 hover:text-slate-200'
-                        }`}
-                      >
-                        Cost %
-                      </button>
-                      <button
-                        onClick={() => setQ3View('brand')}
-                        className={`px-2 py-0.5 rounded text-[11px] font-semibold transition-all ${
-                          q3View === 'brand'
-                            ? 'bg-blue-600 text-white shadow'
-                            : 'text-slate-400 hover:text-slate-200'
-                        }`}
-                      >
-                        Brands
-                      </button>
-                    </div>
-
-                    {/* Drilldown Modal Button */}
-                    <button
-                      onClick={() => setShowBrandModal(true)}
-                      className="flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-lg bg-blue-600/10 hover:bg-blue-600/20 text-blue-500 border border-blue-500/30 transition-all"
-                      title="Open 15 Brands Matrix"
-                    >
-                      <Building2 className="w-3.5 h-3.5" />
-                      <span className="hidden sm:inline">15 Brands Matrix</span>
-                    </button>
-
-                    <button
-                      onClick={() => setZoomedQuadrant(zoomedQuadrant === 3 ? null : 3)}
-                      className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-slate-300 transition-all hover:scale-105"
-                      title={zoomedQuadrant === 3 ? "Restore 4-Quadrant View (Esc)" : "Zoom Quadrant 3"}
-                    >
-                      {zoomedQuadrant === 3 ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-                    </button>
-                  </div>
-                </div>
-
-                <div className="flex-1 min-h-[220px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    {q3View === 'cost' ? (
-                      <BarChart data={chartData} stackOffset="expand">
-                        <CartesianGrid strokeDasharray="3 3" stroke={isLightMode ? "#E2E8F0" : "#1E293B"} vertical={false} />
-                        <XAxis dataKey="year" stroke={isLightMode ? "#64748B" : "#94A3B8"} fontSize={11} />
-                        <YAxis
-                          stroke={isLightMode ? "#64748B" : "#94A3B8"}
-                          fontSize={11}
-                          tickFormatter={(val) => `${Math.round(val * 100)}%`}
-                        />
-                        <Tooltip
-                          contentStyle={{
-                            backgroundColor: isLightMode ? '#FFFFFF' : '#0F172A',
-                            borderColor: isLightMode ? '#CBD5E1' : '#334155',
-                            borderRadius: 10,
-                            fontSize: 12,
-                          }}
-                          formatter={(val: any, name: any) => [`${val} IDRbn`, name]}
-                        />
-                        <Legend wrapperStyle={{ fontSize: 11 }} />
-                        <Bar dataKey="cogs" name="COGS / HPP" stackId="a" fill="#F43F5E" />
-                        <Bar dataKey="opex" name="Total OPEX" stackId="a" fill="#FB923C" />
-                        <Bar dataKey="npat" name="Net Profit Margin" stackId="a" fill="#10B981" />
-                      </BarChart>
-                    ) : (
-                      <BarChart data={brandChartData}>
-                        <CartesianGrid strokeDasharray="3 3" stroke={isLightMode ? "#E2E8F0" : "#1E293B"} vertical={false} />
-                        <XAxis dataKey="year" stroke={isLightMode ? "#64748B" : "#94A3B8"} fontSize={11} />
-                        <YAxis stroke={isLightMode ? "#64748B" : "#94A3B8"} fontSize={11} />
-                        <Tooltip
-                          contentStyle={{
-                            backgroundColor: isLightMode ? '#FFFFFF' : '#0F172A',
-                            borderColor: isLightMode ? '#CBD5E1' : '#334155',
-                            borderRadius: 10,
-                            fontSize: 12,
-                          }}
-                          formatter={(val: any, name: any) => [`${val} IDRbn`, name]}
-                        />
-                        <Legend wrapperStyle={{ fontSize: 11 }} />
-                        <Bar dataKey="Bulgari" stackId="a" fill="#3B82F6" />
-                        <Bar dataKey="Haagendazs" stackId="a" fill="#F97316" />
-                        <Bar dataKey="Lulu Lemon" stackId="a" fill="#A855F7" />
-                        <Bar dataKey="Invincible" stackId="a" fill="#10B981" />
-                        <Bar dataKey="Omega" stackId="a" fill="#6366F1" />
-                        <Bar dataKey="Media" stackId="a" fill="#EC4899" />
-                        <Bar dataKey="Others" stackId="a" fill="#64748B" />
-                      </BarChart>
-                    )}
-                  </ResponsiveContainer>
-                </div>
-              </motion.div>
-            )}
-
-            {/* QUADRANT 4: P&L STEP-DOWN WATERFALL BRIDGE */}
-            {(zoomedQuadrant === null || zoomedQuadrant === 4) && (
-              <motion.div
-                layout
-                initial={{ opacity: 0, scale: 0.98 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.98 }}
-                transition={{ duration: 0.3 }}
-                className={`rounded-2xl border p-4 flex flex-col justify-between ${cardClass}`}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <span className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                      <Compass className="w-4 h-4" />
-                    </span>
-                    <div>
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400">
-                        Quadrant 4
-                      </span>
-                      <div className="flex items-center gap-2">
-                        <h3 className="text-sm font-bold tracking-tight">
-                          P&L Step-Down Bridge
-                        </h3>
-                        <select
-                          value={selectedWaterfallYear}
-                          onChange={(e) => setSelectedWaterfallYear(e.target.value)}
-                          className={`text-xs rounded-md px-2 py-0.5 border font-semibold outline-none ${
-                            isLightMode 
-                              ? 'bg-slate-100 border-slate-300 text-slate-800' 
-                              : 'bg-slate-800 border-slate-700 text-slate-200 focus:border-emerald-500'
-                          }`}
-                        >
-                          {chartYears.map(y => (
-                            <option key={y} value={y}>{y} {parseInt(y) === 2026 ? '(Projection)' : parseInt(y) >= 2027 ? '(Plan)' : ''}</option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => setZoomedQuadrant(zoomedQuadrant === 4 ? null : 4)}
-                    className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-slate-300 transition-all hover:scale-105"
-                    title={zoomedQuadrant === 4 ? "Restore 4-Quadrant View (Esc)" : "Zoom Quadrant 4"}
-                  >
-                    {zoomedQuadrant === 4 ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-                  </button>
-                </div>
-
-                <div className="flex-1 min-h-[220px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={waterfallData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke={isLightMode ? "#E2E8F0" : "#1E293B"} vertical={false} />
-                      <XAxis dataKey="name" stroke={isLightMode ? "#64748B" : "#94A3B8"} fontSize={10} interval={0} angle={-15} textAnchor="end" height={45} />
-                      <YAxis stroke={isLightMode ? "#64748B" : "#94A3B8"} fontSize={11} />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: isLightMode ? '#FFFFFF' : '#0F172A',
-                          borderColor: isLightMode ? '#CBD5E1' : '#334155',
-                          borderRadius: 10,
-                          fontSize: 12,
-                        }}
-                        formatter={(val: any) => [`${Math.abs(val)} IDRbn`, 'Amount']}
-                      />
-                      <ReferenceLine y={0} stroke="#94A3B8" />
-                      <Bar
-                        dataKey="value"
-                        name="Amount (IDRbn)"
-                        radius={[6, 6, 0, 0]}
-                        isAnimationActive={true}
-                        animationDuration={1200}
-                      />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </motion.div>
-            )}
-          </motion.div>
-        </AnimatePresence>
-      </main>
+      <CockpitCharts dataset={dataset} isLightMode={isLightMode} percentage={unitMode === 'pct'} zoom={zoomedQuadrant} setZoom={setZoomedQuadrant} onOpenBrands={() => setShowBrandModal(true)} brandData={brandChartData} />
 
       {/* Presentation Footer Bar */}
-      <footer className={`px-6 py-2.5 border-t flex items-center justify-between text-xs ${
+      <footer className={`cockpit-footer px-6 py-2.5 border-t flex items-center justify-between text-xs ${
         isLightMode ? 'border-slate-200 bg-white text-slate-500' : 'border-slate-800/80 bg-[#0B0F19] text-slate-400'
       }`}>
         <div className="flex items-center gap-3">

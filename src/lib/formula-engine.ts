@@ -1,98 +1,168 @@
-import { FinancialRowData, ChartDataPoint, BrandRowData } from './types';
+import { FinancialRowData, ChartDataPoint } from './types';
+
+type Items = Record<string, FinancialRowData>;
+
+/** One edited input cell, e.g. { key: 'personnel', year: '2027', value: 120.5 } */
+export interface CellEdit {
+  key: string;
+  year: string;
+  value: number;
+}
+
+const round4 = (n: number) => Math.round(n * 1e4) / 1e4;
+const round2 = (n: number) => Math.round(n * 1e2) / 1e2;
+const valueAt = (items: Items, key: string, year: string) => items[key]?.values[year] ?? 0;
+
+/** What is left of a stored total once the stored lines under it are taken out (ignores rounding noise) */
+const remainder = (total: number, parts: number[]) => {
+  const diff = round4(total - parts.reduce((sum, part) => sum + part, 0));
+  return Math.abs(diff) < 0.015 ? 0 : diff;
+};
 
 /**
- * Recalculates formula-derived rows whenever inputs are changed in the Admin Grid
+ * Lines that the workbook adds into a total but that are not stored as their own row.
+ * Their value is the leftover of the stored total, so they stay put unless the user edits them.
  */
-export function recalculateFinancials(
-  items: Record<string, FinancialRowData>,
-  years: string[]
-): Record<string, FinancialRowData> {
-  const updated: Record<string, FinancialRowData> = JSON.parse(JSON.stringify(items));
+const VIRTUAL_ROWS: Record<string, { requires: string[]; value: (items: Items, year: string) => number }> = {
+  // TOTAL REVENUE also includes Retail-NEW, F&B-NEW and newly acquired brands (workbook rows 14-16)
+  rev_new_business: {
+    requires: ['total_revenue'],
+    value: (items, year) =>
+      remainder(valueAt(items, 'total_revenue', year), [
+        valueAt(items, 'rev_publisher', year),
+        valueAt(items, 'rev_retail', year),
+        valueAt(items, 'rev_fnb', year),
+      ]),
+  },
+  // Same for COGS (workbook rows 23-25)
+  cogs_new_business: {
+    requires: ['cogs'],
+    value: (items, year) =>
+      remainder(valueAt(items, 'cogs', year), [
+        valueAt(items, 'cogs_publisher', year),
+        valueAt(items, 'cogs_retail', year),
+        valueAt(items, 'cogs_fnb', year),
+      ]),
+  },
+  // NPAT = NPBT - tax - subholding/holding cost + share of associates (workbook row 65)
+  holding_assoc_net: {
+    requires: ['npbt', 'npat'],
+    value: (items, year) =>
+      round4(valueAt(items, 'npbt', year) - valueAt(items, 'income_tax', year) - valueAt(items, 'npat', year)),
+  },
+};
 
-  for (const year of years) {
-    // 1. Total Revenue Check (Divisions roll-up if present)
-    const revPub = updated['rev_publisher']?.values[year] ?? 0;
-    const revRet = updated['rev_retail']?.values[year] ?? 0;
-    const revFnb = updated['rev_fnb']?.values[year] ?? 0;
-    if (revPub + revRet + revFnb > 0 && updated['total_revenue']) {
-      updated['total_revenue'].values[year] = Number((revPub + revRet + revFnb).toFixed(2));
-    }
+// How much each calculated row moves when an input row goes up by 1. This mirrors the formulas in
+// workbook sheet "PL MRA Group+Holding (Combine)". Rows not stored here (subholding costs, associates,
+// other P&L lines) keep their value, which is why edits are applied as changes and not recomputed from scratch.
+const REVENUE_CHAIN = {
+  total_revenue: 1,
+  gross_profit: 1,
+  operating_profit: 1,
+  npbt: 1,
+  npat: 1,
+  ebitda_after_holding: 1,
+  ebitda_before_holding: 1,
+};
+const COGS_CHAIN = {
+  cogs: 1,
+  gross_profit: -1,
+  operating_profit: -1,
+  npbt: -1,
+  npat: -1,
+  ebitda_after_holding: -1,
+  ebitda_before_holding: -1,
+};
+const OPEX_CHAIN = {
+  total_opex: 1,
+  operating_profit: -1,
+  npbt: -1,
+  npat: -1,
+  ebitda_after_holding: -1,
+  ebitda_before_holding: -1,
+};
 
-    const totalRev = updated['total_revenue']?.values[year] ?? 0;
+const INPUT_EFFECTS: Record<string, Record<string, number>> = {
+  rev_publisher: REVENUE_CHAIN,
+  rev_retail: REVENUE_CHAIN,
+  rev_fnb: REVENUE_CHAIN,
+  rev_new_business: REVENUE_CHAIN,
+  cogs_publisher: COGS_CHAIN,
+  cogs_retail: COGS_CHAIN,
+  cogs_fnb: COGS_CHAIN,
+  cogs_new_business: COGS_CHAIN,
+  personnel: OPEX_CHAIN,
+  marketing: OPEX_CHAIN,
+  ga_expenses: OPEX_CHAIN,
+  // Constant expenses are depreciation & amortization: EBITDA adds them back, so EBITDA does not move
+  constant_expenses: { total_opex: 1, depr_amort: 1, operating_profit: -1, npbt: -1, npat: -1 },
+  other_expenses: { npbt: -1, npat: -1, ebitda_after_holding: -1, ebitda_before_holding: -1 },
+  // Interest is part of other expenses, but EBITDA adds it back
+  interest_expense: { other_expenses: 1, npbt: -1, npat: -1 },
+  // Tax is added back in EBITDA too
+  income_tax: { npat: -1 },
+};
 
-    // 2. COGS Roll-up
-    const cogsPub = updated['cogs_publisher']?.values[year] ?? 0;
-    const cogsRet = updated['cogs_retail']?.values[year] ?? 0;
-    const cogsFnb = updated['cogs_fnb']?.values[year] ?? 0;
-    if (cogsPub + cogsRet + cogsFnb > 0 && updated['cogs']) {
-      updated['cogs'].values[year] = Number((cogsPub + cogsRet + cogsFnb).toFixed(2));
-    }
-    const totalCogs = updated['cogs']?.values[year] ?? 0;
+/** True for rows the user can type into; every other row is calculated */
+export const isInputRow = (key: string) => key in INPUT_EFFECTS;
 
-    // 3. Gross Profit & GP Margin
-    const gp = Number((totalRev - totalCogs).toFixed(2));
-    if (updated['gross_profit']) {
-      updated['gross_profit'].values[year] = gp;
-      updated['gross_profit'].isFormula = true;
-    }
-    if (updated['gp_margin']) {
-      updated['gp_margin'].values[year] = totalRev > 0 ? Number(((gp / totalRev) * 100).toFixed(2)) : 0;
-      updated['gp_margin'].isFormula = true;
-    }
+/** Whether the dataset has what this row needs (stored rows: the row itself; virtual rows: their parents) */
+export function hasRow(items: Items, key: string): boolean {
+  const virtual = VIRTUAL_ROWS[key];
+  return virtual ? virtual.requires.every((required) => required in items) : key in items;
+}
 
-    // 4. OPEX Roll-up
-    const personnel = updated['personnel']?.values[year] ?? 0;
-    const marketing = updated['marketing']?.values[year] ?? 0;
-    const ga = updated['ga_expenses']?.values[year] ?? 0;
-    const constant = updated['constant_expenses']?.values[year] ?? 0;
-    const opexSum = Number((personnel + marketing + ga + constant).toFixed(2));
-    if (opexSum > 0 && updated['total_opex']) {
-      updated['total_opex'].values[year] = opexSum;
-      updated['total_opex'].isFormula = true;
-    }
-    const totalOpex = updated['total_opex']?.values[year] ?? 0;
+/** Value of a row for one year, including the virtual rows that are not stored */
+export function getRowValue(items: Items, key: string, year: string): number {
+  const virtual = VIRTUAL_ROWS[key];
+  return virtual ? virtual.value(items, year) : valueAt(items, key, year);
+}
 
-    if (updated['opex_margin']) {
-      updated['opex_margin'].values[year] = totalRev > 0 ? Number(((totalOpex / totalRev) * 100).toFixed(2)) : 0;
-      updated['opex_margin'].isFormula = true;
-    }
+/**
+ * Applies edits made in the Admin Grid and updates every calculated row they affect.
+ * Returns the same object when nothing effectively changed, so callers can skip saving/re-rendering.
+ */
+export function applyInputEdits(items: Items, edits: CellEdit[]): Items {
+  const next: Items = { ...items };
+  const cloned = new Set<string>();
+  const touchedYears = new Set<string>();
+  let changed = false;
 
-    // 5. Operating Profit (EBIT)
-    const ebit = Number((gp - totalOpex).toFixed(2));
-    if (updated['operating_profit']) {
-      updated['operating_profit'].values[year] = ebit;
-      updated['operating_profit'].isFormula = true;
+  const write = (key: string, year: string, value: number) => {
+    if (!next[key]) return;
+    if (!cloned.has(key)) {
+      next[key] = { ...next[key], values: { ...next[key].values } };
+      cloned.add(key);
     }
+    next[key].values[year] = round4(value);
+  };
 
-    // 6. Net Profit Before Tax (NPBT)
-    const otherExp = updated['other_expenses']?.values[year] ?? 0;
-    const npbt = Number((ebit - otherExp).toFixed(2));
-    if (updated['npbt']) {
-      updated['npbt'].values[year] = npbt;
-      updated['npbt'].isFormula = true;
-    }
+  for (const { key, year, value } of edits) {
+    const effects = INPUT_EFFECTS[key];
+    if (!effects || !Number.isFinite(value) || !hasRow(next, key)) continue;
 
-    // 7. Net Profit After Tax (NPAT)
-    const tax = updated['income_tax']?.values[year] ?? 0;
-    const npat = Number((npbt - tax).toFixed(2));
-    if (updated['npat']) {
-      updated['npat'].values[year] = npat;
-      updated['npat'].isFormula = true;
-    }
+    const delta = value - getRowValue(next, key, year);
+    if (Math.abs(delta) < 1e-9) continue;
 
-    // 8. EBITDA After Holding Cost
-    const depr = updated['depr_amort']?.values[year] ?? 0;
-    if (updated['ebitda_after_holding']) {
-      // EBITDA approx = Operating Profit + Depr
-      const currentVal = updated['ebitda_after_holding'].values[year];
-      // Only recalculate if depr exists or value was 0
-      if (depr > 0) {
-        updated['ebitda_after_holding'].values[year] = Number((ebit + depr).toFixed(2));
-      }
+    // Virtual rows have nothing to store: they only move the totals they belong to
+    if (!(key in VIRTUAL_ROWS)) write(key, year, value);
+    for (const [target, weight] of Object.entries(effects)) {
+      write(target, year, valueAt(next, target, year) + weight * delta);
     }
+    touchedYears.add(year);
+    changed = true;
   }
 
-  return updated;
+  if (!changed) return items;
+
+  touchedYears.forEach((year) => {
+    const revenue = valueAt(next, 'total_revenue', year);
+    const percentOfRevenue = (amount: number) => (revenue > 0 ? round2((amount / revenue) * 100) : 0);
+    write('gp_margin', year, percentOfRevenue(valueAt(next, 'gross_profit', year)));
+    write('opex_margin', year, percentOfRevenue(valueAt(next, 'total_opex', year)));
+  });
+
+  return next;
 }
 
 /**
@@ -126,57 +196,4 @@ export function buildChartData(
       npatMargin
     };
   });
-}
-
-/**
- * Recalculates brand-level totals and YoY growth percentages whenever brand numbers are edited
- */
-export function recalculateBrandBreakdown(
-  brands: BrandRowData[],
-  years: string[] = ['2026', '2027', '2028', '2029', '2030', '2031']
-): BrandRowData[] {
-  const updated: BrandRowData[] = JSON.parse(JSON.stringify(brands));
-  const totalRow = updated.find((b) => b.category === 'total');
-
-  for (let i = 0; i < years.length; i++) {
-    const year = years[i];
-    let sumBn = 0;
-    let sumIdr = 0;
-
-    for (const row of updated) {
-      if (['existing', 'fnb_new', 'retail_new'].includes(row.category)) {
-        const valBn = row.valuesBn[year] ?? 0;
-        const valIdr = row.valuesIdr[year] ?? (valBn * 1e9);
-        sumBn += valBn;
-        sumIdr += valIdr;
-
-        // Recalculate YoY growth
-        if (i > 0) {
-          const prevYear = years[i - 1];
-          const prevVal = row.valuesBn[prevYear] ?? 0;
-          row.growthPct = row.growthPct || {};
-          if (prevVal > 0) {
-            row.growthPct[year] = Number((((valBn - prevVal) / prevVal) * 100).toFixed(1));
-          } else {
-            row.growthPct[year] = null;
-          }
-        }
-      }
-    }
-
-    if (totalRow) {
-      totalRow.valuesBn[year] = Number(sumBn.toFixed(2));
-      totalRow.valuesIdr[year] = Math.round(sumIdr);
-      if (i > 0) {
-        const prevYear = years[i - 1];
-        const prevTotal = totalRow.valuesBn[prevYear] ?? 0;
-        totalRow.growthPct = totalRow.growthPct || {};
-        if (prevTotal > 0) {
-          totalRow.growthPct[year] = Number((((sumBn - prevTotal) / prevTotal) * 100).toFixed(1));
-        }
-      }
-    }
-  }
-
-  return updated;
 }

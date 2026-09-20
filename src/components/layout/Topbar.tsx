@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import {
-  Copy, Check, Save, MonitorPlay, Sun, Moon
+  Copy, Check, Save, MonitorPlay, Sun, Moon, RotateCcw
 } from 'lucide-react';
 import { ScenarioDataset } from '@/lib/types';
 
@@ -18,6 +18,7 @@ interface TopbarProps {
   onCopyLink: () => void;
   isLightMode: boolean;
   onToggleTheme: () => void;
+  onRestoreDefault: () => void;
 }
 
 export default function Topbar({
@@ -31,6 +32,7 @@ export default function Topbar({
   onCopyLink,
   isLightMode,
   onToggleTheme,
+  onRestoreDefault,
 }: TopbarProps) {
   const topbarBg = isLightMode
     ? 'bg-white/90 border-slate-200/90 text-slate-900 shadow-sm'
@@ -41,16 +43,18 @@ export default function Topbar({
     : 'bg-slate-900 border-slate-700/80 text-white';
 
   return (
-    <header className={`sticky top-0 z-40 backdrop-blur-md border-b px-6 py-3.5 flex items-center justify-between transition-colors duration-300 ${topbarBg}`}>
-      <div className="flex items-center gap-3">
-        <h1 className="font-bold text-sm tracking-tight">{title}</h1>
-        <div className={`h-4 w-px ${isLightMode ? 'bg-slate-300' : 'bg-slate-800'}`} />
-        <div className="flex items-center gap-1.5 text-xs text-slate-400">
-          <span>Active Deck:</span>
+    <header className={`sticky top-0 z-40 backdrop-blur-md border-b px-5 py-2.5 flex flex-wrap items-center justify-between gap-3 transition-colors duration-300 ${topbarBg}`}>
+      <div className="flex min-w-0 flex-1 items-center gap-3">
+        <h1 className="max-w-[250px] truncate text-sm font-semibold tracking-tight" title={title}>
+          {title.includes('P&L Consolidation') ? 'P&L Consolidation' : title}
+        </h1>
+        <div className={`hidden h-5 w-px sm:block ${isLightMode ? 'bg-slate-200' : 'bg-slate-800'}`} />
+        <div className="min-w-0 flex-1 text-xs">
           <select
+            aria-label="Active scenario"
             value={activeScenarioSlug}
             onChange={(e) => setActiveScenarioSlug(e.target.value)}
-            className={`text-xs rounded-lg border px-2.5 py-1 font-semibold outline-none focus:border-blue-500 transition-colors ${selectBg}`}
+            className={`w-full max-w-[390px] truncate rounded-lg border px-3 py-2 text-xs font-medium outline-none transition-colors focus:border-emerald-500 ${selectBg}`}
           >
             {scenariosList.map((s) => (
               <option key={s.slug} value={s.slug}>
@@ -62,12 +66,13 @@ export default function Topbar({
       </div>
 
       {/* Right Controls */}
-      <div className="flex items-center gap-2.5">
+      <div className="flex items-center gap-2">
         {/* Theme Switcher Toggle (Night / Light Mode) */}
         <button
           onClick={onToggleTheme}
-          title={isLightMode ? 'Switch to Night Mode' : 'Switch to Light Mode'}
-          className={`p-2 rounded-lg border transition-all ${
+          aria-label={isLightMode ? 'Switch to Night Mode' : 'Switch to Light Mode'}
+          data-tooltip={isLightMode ? 'Gunakan tampilan gelap' : 'Gunakan tampilan terang'}
+          className={`ui-tooltip p-2.5 rounded-lg border transition-all ${
             isLightMode
               ? 'bg-slate-100 border-slate-300 hover:bg-slate-200 text-slate-700'
               : 'bg-slate-800 border-slate-700 hover:bg-slate-700 text-amber-400'
@@ -76,36 +81,57 @@ export default function Topbar({
           {isLightMode ? <Moon size={14} /> : <Sun size={14} />}
         </button>
 
+        <button
+          type="button"
+          onClick={onRestoreDefault}
+          disabled={isSaving}
+          aria-label="Restore Default"
+          data-tooltip="Kembalikan angka ke baseline awal"
+          className={`ui-tooltip flex items-center gap-1.5 whitespace-nowrap px-3 py-2.5 text-xs font-semibold rounded-lg border transition-all active:scale-95 disabled:opacity-50 ${
+            isLightMode
+              ? 'bg-white border-amber-300 hover:bg-amber-50 text-amber-700'
+              : 'bg-amber-950/20 border-amber-700/60 hover:bg-amber-900/30 text-amber-300'
+          }`}
+        >
+          <RotateCcw size={13} />
+          Reset
+        </button>
+
         {/* Quick Save Button */}
         <button
           onClick={onSaveCurrent}
           disabled={isSaving}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-blue-600 hover:bg-blue-500 text-white shadow-md shadow-blue-600/20 transition-all active:scale-95 disabled:opacity-50"
+          aria-label="Save scenario changes"
+          data-tooltip="Simpan perubahan skenario aktif"
+          className="ui-tooltip flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-blue-600 px-3.5 py-2.5 text-xs font-semibold text-white shadow-sm shadow-blue-600/20 transition-all hover:bg-blue-500 active:scale-95 disabled:opacity-50"
         >
           <Save size={13} />
-          {isSaving ? 'Saving...' : 'Save Changes'}
+          {isSaving ? 'Saving…' : 'Save'}
         </button>
 
         {/* Copy Link Button */}
         <button
           onClick={onCopyLink}
-          className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all active:scale-95 ${
+          aria-label={copiedLink ? 'Presentation link copied' : 'Copy presentation link'}
+          data-tooltip={copiedLink ? 'Link berhasil disalin' : 'Salin link presentasi'}
+          className={`ui-tooltip flex h-9 w-9 items-center justify-center rounded-lg border transition-all active:scale-95 ${
             isLightMode
               ? 'bg-slate-100 border-slate-300 hover:bg-slate-200 text-slate-700'
               : 'bg-slate-800 border-slate-700 hover:bg-slate-700 text-slate-200'
           }`}
         >
-          {copiedLink ? <Check size={13} className="text-emerald-500" /> : <Copy size={13} />}
-          {copiedLink ? 'Copied' : 'Copy Deck Link'}
+          {copiedLink ? <Check size={14} className="text-emerald-500" /> : <Copy size={14} />}
         </button>
 
         {/* Launch Presentation Button */}
         <Link
-          href={`/p/${activeScenarioSlug}`}
-          className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-md shadow-emerald-600/20 transition-all active:scale-95"
+          href={`/deck/${activeScenarioSlug}?slide=highlights`}
+          aria-label="Open executive presentation"
+          data-tooltip="Buka presentasi skenario aktif"
+          className="ui-tooltip flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-emerald-600 px-3.5 py-2.5 text-xs font-semibold text-white shadow-sm shadow-emerald-600/20 transition-all hover:bg-emerald-500 active:scale-95"
         >
           <MonitorPlay size={13} />
-          Launch 16:9 Deck
+          Present
         </Link>
       </div>
     </header>

@@ -4,9 +4,9 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Save, PlusCircle, ExternalLink, Copy, Check,
-  Lock, Edit3, Sparkles, CheckCircle2,
+  Edit3, Sparkles, CheckCircle2,
   Table2, Layers, FolderKanban, TrendingUp, CheckCircle,
-  Percent, Coins, Building2, ArrowUpRight
+  Percent, Coins, Building2, ArrowUpRight, AlertTriangle, RotateCcw, X
 } from 'lucide-react';
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid
@@ -16,8 +16,18 @@ import Topbar from '@/components/layout/Topbar';
 import HighlightsStudio from '@/components/admin/HighlightsStudio';
 import { ScenarioDataset, BrandRowData } from '@/lib/types';
 import { INITIAL_DATASET, INITIAL_BRAND_BREAKDOWN } from '@/lib/initial-data';
-import { recalculateFinancials, recalculateBrandBreakdown } from '@/lib/formula-engine';
+import { applyInputEdits, CellEdit } from '@/lib/formula-engine';
+import { applyBrandEdits, BrandEdit, BRAND_YEARS } from '@/lib/brand-engine';
+import { useGridEditor } from '@/lib/use-grid-editor';
+import GridHelp from '@/components/admin/GridHelp';
+import { EditHistoryButtons, UnsavedBadge } from '@/components/admin/EditToolbar';
+import PnlGrid from '@/components/admin/PnlGrid';
+import BrandMatrixGrid from '@/components/admin/BrandMatrixGrid';
 import confetti from 'canvas-confetti';
+
+const GridPlaceholder = () => (
+  <div className="h-64 flex items-center justify-center text-xs text-slate-400">Loading spreadsheet...</div>
+);
 
 export default function AdminPage() {
   const router = useRouter();
@@ -30,17 +40,41 @@ export default function AdminPage() {
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [scenariosList, setScenariosList] = useState<ScenarioDataset[]>([INITIAL_DATASET]);
-  const [highlightedRow, setHighlightedRow] = useState<string | null>(null);
+  const [isDirty, setIsDirty] = useState(false);
+  // The grids measure themselves against the browser window, so they are rendered once the page is up
+  const [hasMounted, setHasMounted] = useState(false);
   const [origin, setOrigin] = useState('');
   const [isLightMode, setIsLightMode] = useState(true);
   const [brandViewMode, setBrandViewMode] = useState<'bn' | 'full' | 'growth'>('bn');
-  const [highlightedBrandRow, setHighlightedBrandRow] = useState<string | null>(null);
-  const brandYears = ['2026', '2027', '2028', '2029', '2030', '2031'];
+  const [showRestoreDefault, setShowRestoreDefault] = useState(false);
+  const [restoreConfirmation, setRestoreConfirmation] = useState('');
 
   const currentBrands: BrandRowData[] =
     dataset.brandBreakdown && dataset.brandBreakdown.length > 0
       ? dataset.brandBreakdown
       : INITIAL_BRAND_BREAKDOWN;
+
+  // Each grid keeps its own undo history and highlights the rows an edit changed
+  const pnlEditor = useGridEditor<ScenarioDataset['items'], CellEdit>({
+    snapshot: dataset.items,
+    apply: applyInputEdits,
+    changedKeys: (before, after) => Object.keys(after).filter((key) => after[key] !== before[key]),
+    onCommit: (items) => {
+      setDataset((prev) => ({ ...prev, items }));
+      setIsDirty(true);
+    },
+  });
+  const brandEditor = useGridEditor<BrandRowData[], BrandEdit>({
+    snapshot: currentBrands,
+    apply: (brands, edits) => applyBrandEdits(brands, edits),
+    // Only rows whose figures changed (the edited brand and the total), not rows that just got new growth figures
+    changedKeys: (before, after) =>
+      after.filter((row, index) => row.valuesIdr !== before[index].valuesIdr).map((row) => row.id),
+    onCommit: (brandBreakdown) => {
+      setDataset((prev) => ({ ...prev, brandBreakdown }));
+      setIsDirty(true);
+    },
+  });
 
   const topBrands2031 = [...currentBrands]
     .filter(
@@ -54,35 +88,6 @@ export default function AdminPage() {
   const totalRev2031 =
     currentBrands.find((b) => b.category === 'total')?.valuesBn['2031'] || 3408.64;
 
-  const handleBrandCellChange = (brandId: string, year: string, valStr: string) => {
-    const cleanStr = valStr.replace(/[^0-9.-]+/g, '');
-    const rawNum = parseFloat(cleanStr) || 0;
-    const updatedBrands = currentBrands.map((b) => {
-      if (b.id !== brandId) return b;
-      let numBn = rawNum;
-      let numIdr = rawNum;
-      if (brandViewMode === 'full') {
-        numBn = Number((rawNum / 1e9).toFixed(2));
-        numIdr = rawNum;
-      } else {
-        numBn = rawNum;
-        numIdr = rawNum * 1e9;
-      }
-      return {
-        ...b,
-        valuesBn: { ...b.valuesBn, [year]: numBn },
-        valuesIdr: { ...b.valuesIdr, [year]: numIdr },
-      };
-    });
-
-    const recalculated = recalculateBrandBreakdown(updatedBrands, brandYears);
-    setDataset((prev) => ({
-      ...prev,
-      brandBreakdown: recalculated,
-    }));
-    setHighlightedBrandRow(brandId);
-  };
-
   // Focus years for business plan (2024 to 2031)
   const displayYears = dataset.years.filter((y) => parseInt(y) >= 2024);
 
@@ -92,6 +97,7 @@ export default function AdminPage() {
     if (typeof window !== 'undefined') {
       setOrigin(window.location.origin);
     }
+    setHasMounted(true);
   }, []);
 
   const fetchScenarios = async () => {
@@ -110,6 +116,9 @@ export default function AdminPage() {
           setScenariosList(loadedScenarios);
           if (loadedScenarios[0]) {
             setDataset(loadedScenarios[0]);
+            pnlEditor.clearHistory();
+            brandEditor.clearHistory();
+            setIsDirty(false);
           }
         }
       }
@@ -128,28 +137,14 @@ export default function AdminPage() {
     } catch (e) {}
   };
 
-  const handleCellChange = (key: string, year: string, valStr: string) => {
-    const num = parseFloat(valStr) || 0;
-    const newItems = { ...dataset.items };
-    if (newItems[key]) {
-      newItems[key] = {
-        ...newItems[key],
-        values: {
-          ...newItems[key].values,
-          [year]: num,
-        },
-      };
-    }
-
-    // Recalculate derived formulas automatically
-    const recalculated = recalculateFinancials(newItems, dataset.years);
-    setDataset((prev) => ({
-      ...prev,
-      items: recalculated,
-    }));
-
-    setHighlightedRow(key);
-    setTimeout(() => setHighlightedRow(null), 1200);
+  // Load a saved scenario into the editor: start with a clean undo history and nothing unsaved
+  const loadIntoEditor = (scenario: ScenarioDataset) => {
+    setActiveScenarioSlug(scenario.slug);
+    setDataset(scenario);
+    setScenarioTitle(scenario.title);
+    pnlEditor.clearHistory();
+    brandEditor.clearHistory();
+    setIsDirty(false);
   };
 
   const handleSaveAsNew = async () => {
@@ -178,6 +173,7 @@ export default function AdminPage() {
 
       if (res.ok) {
         setSaveSuccess(true);
+        setIsDirty(false);
         setActiveScenarioSlug(cleanSlug);
         setNewSlug('');
         fetchScenarios();
@@ -209,6 +205,7 @@ export default function AdminPage() {
 
       if (res.ok) {
         setSaveSuccess(true);
+        setIsDirty(false);
         fetchScenarios();
         triggerCelebration();
         setTimeout(() => setSaveSuccess(false), 3000);
@@ -223,16 +220,38 @@ export default function AdminPage() {
 
   const handleCopyLink = () => {
     const fullUrl = origin
-      ? `${origin}/p/${activeScenarioSlug}`
-      : `/p/${activeScenarioSlug}`;
+      ? `${origin}/deck/${activeScenarioSlug}?slide=highlights`
+      : `/deck/${activeScenarioSlug}?slide=highlights`;
     navigator.clipboard.writeText(fullUrl);
     setCopiedLink(true);
     setTimeout(() => setCopiedLink(false), 2000);
   };
 
-  const presentationUrl = origin
-    ? `${origin}/p/${activeScenarioSlug}`
-    : `/p/${activeScenarioSlug}`;
+  const openRestoreDefault = () => {
+    setRestoreConfirmation('');
+    setShowRestoreDefault(true);
+  };
+
+  const closeRestoreDefault = () => {
+    setRestoreConfirmation('');
+    setShowRestoreDefault(false);
+  };
+
+  const handleRestoreDefault = () => {
+    if (restoreConfirmation.trim().toUpperCase() !== 'DEFAULT') return;
+
+    // Keep the active scenario identity. Only its planning figures return to the original baseline.
+    setDataset((current) => ({
+      ...current,
+      years: [...INITIAL_DATASET.years],
+      items: structuredClone(INITIAL_DATASET.items),
+      brandBreakdown: structuredClone(INITIAL_BRAND_BREAKDOWN),
+    }));
+    pnlEditor.clearHistory();
+    brandEditor.clearHistory();
+    setIsDirty(true);
+    closeRestoreDefault();
+  };
 
   // Data for Division Analysis Chart
   const divisionChartData = displayYears.map((year) => ({
@@ -282,11 +301,7 @@ export default function AdminPage() {
           activeScenarioSlug={activeScenarioSlug}
           setActiveScenarioSlug={(slug) => {
             const sel = scenariosList.find((s) => s.slug === slug);
-            if (sel) {
-              setActiveScenarioSlug(sel.slug);
-              setDataset(sel);
-              setScenarioTitle(sel.title);
-            }
+            if (sel) loadIntoEditor(sel);
           }}
           scenariosList={scenariosList}
           onSaveCurrent={handleUpdateCurrent}
@@ -295,6 +310,7 @@ export default function AdminPage() {
           onCopyLink={handleCopyLink}
           isLightMode={isLightMode}
           onToggleTheme={() => setIsLightMode(!isLightMode)}
+          onRestoreDefault={openRestoreDefault}
         />
 
         {/* Dynamic Tab Body */}
@@ -305,20 +321,28 @@ export default function AdminPage() {
             <div className="space-y-4">
               {/* In-Browser Interactive Spreadsheet Grid */}
               <div className={`rounded-2xl p-5 border transition-all ${cardBg}`}>
-                <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
+                <div className="flex flex-wrap items-start justify-between gap-5 mb-5">
                   <div>
-                    <h3 className={`text-base font-bold flex items-center gap-2 ${isLightMode ? 'text-slate-900' : 'text-white'}`}>
-                      In-Browser Spreadsheet Grid: PL MRA Group+Holding (Combine)
-                      <span className="text-[10px] bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded-full font-semibold border border-emerald-500/30">
-                        Live Recalculate Active
-                      </span>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-emerald-600 mb-2">Financial planning workspace</p>
+                    <div className="flex items-center gap-2"><h3 className={`text-xl font-bold tracking-tight ${isLightMode ? 'text-slate-900' : 'text-white'}`}>
+                      P&L Group + Holding
                     </h3>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      Click on any numeric cell to edit. GP, OPEX, EBITDA, and NPAT auto-recalculate in real-time. (IDR Billion).
-                    </p>
+                    <GridHelp variant="pnl" isLightMode={isLightMode} />
+                    </div>
+                    <p className={`text-xs mt-1.5 ${isLightMode ? 'text-slate-500' : 'text-slate-400'}`}>PL MRA Group+Holding (Combine) · IDR Billion</p>
+                    <div className="flex items-center gap-2 mt-3"><span className={`inline-flex items-center gap-1.5 text-[10px] font-semibold ${isLightMode ? 'text-emerald-700' : 'text-emerald-400'}`}><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />Auto calculation on</span>
+                    {isDirty && <UnsavedBadge isLightMode={isLightMode} />}
+                    </div>
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <EditHistoryButtons
+                      canUndo={pnlEditor.canUndo}
+                      canRedo={pnlEditor.canRedo}
+                      onUndo={pnlEditor.onUndo}
+                      onRedo={pnlEditor.onRedo}
+                      isLightMode={isLightMode}
+                    />
                     <button
                       onClick={handleCopyLink}
                       className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all active:scale-95 ${
@@ -339,123 +363,26 @@ export default function AdminPage() {
                       {isSaving ? 'Saving...' : 'Save Changes'}
                     </button>
                     <button
-                      onClick={() => router.push(`/p/${activeScenarioSlug}`)}
+                      onClick={() => router.push(`/deck/${activeScenarioSlug}?slide=highlights`)}
                       className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white transition-all shadow-sm active:scale-95 cursor-pointer"
                     >
                       <ExternalLink size={13} />
-                      Open Presentation Deck
+                      View Deck
                     </button>
                   </div>
                 </div>
 
-                <div className={`overflow-x-auto border rounded-xl shadow-sm ${isLightMode ? 'border-slate-200' : 'border-slate-800'}`}>
-                  <table className="w-full text-xs text-left border-collapse">
-                    <thead className={`${tableHeaderBg} sticky top-0 z-20 shadow`}>
-                      <tr>
-                        <th className={`py-3 px-4 font-semibold border-b border-r w-64 ${
-                          isLightMode ? 'border-slate-300 bg-slate-100' : 'border-slate-700/80 bg-[#162032]'
-                        }`}>
-                          Financial Line Item
-                        </th>
-                        {displayYears.map((y) => (
-                          <th
-                            key={y}
-                            className={`py-3 px-4 font-semibold border-b border-r text-right min-w-[105px] ${
-                              isLightMode ? 'border-slate-300' : 'border-slate-700/80'
-                            }`}
-                          >
-                            {y} {parseInt(y) === 2026 ? '(Proj)' : parseInt(y) >= 2027 ? '(Plan)' : ''}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className={`divide-y ${isLightMode ? 'divide-slate-200' : 'divide-slate-800/80'}`}>
-                      {Object.entries(dataset.items).map(([key, row]) => {
-                        const isFormula =
-                          row.isFormula ||
-                          [
-                            'gross_profit',
-                            'gp_margin',
-                            'total_opex',
-                            'operating_profit',
-                            'ebitda_after_holding',
-                            'npat',
-                          ].includes(key);
-                        const isHeaderRow = [
-                          'total_revenue',
-                          'gross_profit',
-                          'total_opex',
-                          'operating_profit',
-                          'ebitda_after_holding',
-                          'npat',
-                        ].includes(key);
-                        const isHighlighted = highlightedRow === key;
-
-                        return (
-                          <tr
-                            key={key}
-                            className={`transition-colors ${
-                              isHighlighted
-                                ? (isLightMode ? 'bg-blue-100/70' : 'bg-blue-900/30')
-                                : isHeaderRow
-                                ? (isLightMode ? 'bg-slate-50 font-bold text-slate-900' : 'bg-slate-900/80 font-bold text-slate-100')
-                                : (isLightMode ? 'hover:bg-slate-50 text-slate-700' : 'hover:bg-slate-800/40 text-slate-300')
-                            }`}
-                          >
-                            <td className={`py-2.5 px-4 border-r flex items-center justify-between ${
-                              isLightMode ? 'border-slate-200' : 'border-slate-800/80'
-                            }`}>
-                              <span
-                                className={
-                                  key.startsWith('rev_') || key.startsWith('cogs_')
-                                    ? (isLightMode ? 'pl-4 text-slate-500' : 'pl-4 text-slate-400')
-                                    : ''
-                                }
-                              >
-                                {row.description}
-                              </span>
-                              {isFormula && (
-                                <span title="Formula derived row (Auto-calculates)">
-                                  <Lock className="w-3 h-3 text-slate-400 ml-1 inline" />
-                                </span>
-                              )}
-                            </td>
-
-                            {displayYears.map((year) => {
-                              const val = row.values[year] ?? 0;
-                              return (
-                                <td key={year} className={`py-1 px-2 border-r text-right ${
-                                  isLightMode ? 'border-slate-200' : 'border-slate-800/80'
-                                }`}>
-                                  {isFormula ? (
-                                    <span className={`font-mono font-semibold px-2 py-1 block ${
-                                      isLightMode ? 'text-emerald-700' : 'text-emerald-400'
-                                    }`}>
-                                      {key.includes('margin')
-                                        ? `${val}%`
-                                        : val.toLocaleString(undefined, {
-                                            minimumFractionDigits: 1,
-                                            maximumFractionDigits: 2,
-                                          })}
-                                    </span>
-                                  ) : (
-                                    <input
-                                      type="number"
-                                      step="0.1"
-                                      defaultValue={val}
-                                      onBlur={(e) => handleCellChange(key, year, e.target.value)}
-                                      className={`w-full text-right font-mono text-xs rounded-lg px-2.5 py-1 border outline-none transition-all shadow-inner ${cellInputBg}`}
-                                    />
-                                  )}
-                                </td>
-                              );
-                            })}
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+                {!hasMounted ? <GridPlaceholder /> : (
+                <PnlGrid
+                  items={dataset.items}
+                  years={displayYears}
+                  isLightMode={isLightMode}
+                  flashKeys={pnlEditor.flashKeys}
+                  onEdits={pnlEditor.onEdits}
+                  onUndo={pnlEditor.onUndo}
+                  onRedo={pnlEditor.onRedo}
+                />
+                )}
               </div>
             </div>
           )}
@@ -490,62 +417,60 @@ export default function AdminPage() {
                 })}
               </div>
 
-              {/* Brand Revenue Matrix Spreadsheet Table */}
+              {/* Brand Revenue Matrix Spreadsheet */}
               <div className={`rounded-2xl p-5 border transition-all ${cardBg}`}>
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-                  <div>
+                  <div className="flex flex-wrap items-center gap-2">
                     <h3 className={`text-sm font-bold flex items-center gap-2 ${isLightMode ? 'text-slate-900' : 'text-white'}`}>
                       <Building2 className="w-4 h-4 text-blue-500" />
                       Brand Revenue Matrix (2026–2031)
-                      <span className="text-[10px] bg-blue-500/10 text-blue-500 font-semibold px-2 py-0.5 rounded border border-blue-500/20">
-                        PL Combine: Rows 97–117
-                      </span>
                     </h3>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      Portofolio brand eksisting, akuisisi, dan unit bisnis baru. Nilai dapat diedit langsung dan tersinkronisasi otomatis.
-                    </p>
+                    <GridHelp variant="brand" isLightMode={isLightMode} />
+                    <span className="text-[10px] bg-blue-500/10 text-blue-500 font-semibold px-2 py-0.5 rounded border border-blue-500/20">
+                      PL Combine: Rows 97–117
+                    </span>
+                    {isDirty && <UnsavedBadge isLightMode={isLightMode} />}
                   </div>
 
                   {/* View Mode Toggle */}
                   <div className="flex items-center gap-2">
                     <span className="text-[11px] font-semibold text-slate-400 hidden md:inline">Display Mode:</span>
                     <div className={`flex rounded-lg border p-0.5 ${isLightMode ? 'bg-slate-100 border-slate-300' : 'bg-slate-900 border-slate-700'}`}>
-                      <button
-                        onClick={() => setBrandViewMode('bn')}
-                        className={`px-2.5 py-1 rounded text-xs font-semibold transition-all ${
-                          brandViewMode === 'bn'
-                            ? 'bg-blue-600 text-white shadow'
-                            : 'text-slate-400 hover:text-slate-200'
-                        }`}
-                      >
-                        IDR Billion
-                      </button>
-                      <button
-                        onClick={() => setBrandViewMode('full')}
-                        className={`px-2.5 py-1 rounded text-xs font-semibold transition-all ${
-                          brandViewMode === 'full'
-                            ? 'bg-blue-600 text-white shadow'
-                            : 'text-slate-400 hover:text-slate-200'
-                        }`}
-                      >
-                        Full Rupiah
-                      </button>
-                      <button
-                        onClick={() => setBrandViewMode('growth')}
-                        className={`px-2.5 py-1 rounded text-xs font-semibold transition-all ${
-                          brandViewMode === 'growth'
-                            ? 'bg-blue-600 text-white shadow'
-                            : 'text-slate-400 hover:text-slate-200'
-                        }`}
-                      >
-                        % YoY Growth
-                      </button>
+                      {(
+                        [
+                          ['bn', 'IDR Billion'],
+                          ['full', 'Full Rupiah'],
+                          ['growth', '% YoY Growth'],
+                        ] as const
+                      ).map(([mode, label]) => (
+                        <button
+                          key={mode}
+                          onClick={() => setBrandViewMode(mode)}
+                          className={`px-2.5 py-1 rounded text-xs font-semibold transition-all ${
+                            brandViewMode === mode
+                              ? 'bg-blue-600 text-white shadow'
+                              : isLightMode
+                              ? 'text-slate-500 hover:text-slate-800'
+                              : 'text-slate-400 hover:text-slate-200'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
                     </div>
+
+                    <EditHistoryButtons
+                      canUndo={brandEditor.canUndo}
+                      canRedo={brandEditor.canRedo}
+                      onUndo={brandEditor.onUndo}
+                      onRedo={brandEditor.onRedo}
+                      isLightMode={isLightMode}
+                    />
 
                     <button
                       onClick={handleUpdateCurrent}
                       disabled={isSaving}
-                      className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-blue-600 hover:bg-blue-500 text-white shadow transition-all active:scale-95"
+                      className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-blue-600 hover:bg-blue-500 text-white shadow transition-all active:scale-95 disabled:opacity-50"
                     >
                       <Save size={12} />
                       {isSaving ? 'Saving...' : 'Save Matrix'}
@@ -553,155 +478,18 @@ export default function AdminPage() {
                   </div>
                 </div>
 
-                {/* Table Container */}
-                <div className={`overflow-x-auto border rounded-xl max-h-[600px] shadow-inner ${isLightMode ? 'border-slate-200' : 'border-slate-800'}`}>
-                  <table className="w-full text-xs text-left border-collapse">
-                    <thead className={`${tableHeaderBg} sticky top-0 z-20 shadow`}>
-                      <tr>
-                        <th className={`py-3 px-4 font-semibold border-b border-r w-72 ${
-                          isLightMode ? 'border-slate-300 bg-slate-100' : 'border-slate-700/80 bg-[#162032]'
-                        }`}>
-                          Brand / Business Unit
-                        </th>
-                        {brandYears.map((year) => (
-                          <th
-                            key={year}
-                            className={`py-3 px-3 font-semibold border-b border-r text-right min-w-[125px] ${
-                              isLightMode ? 'border-slate-300' : 'border-slate-700/80'
-                            }`}
-                          >
-                            <span>{year}</span>
-                            {parseInt(year) === 2026 && <span className="text-[10px] text-slate-400 font-normal ml-1">(Base)</span>}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className={`divide-y ${isLightMode ? 'divide-slate-200' : 'divide-slate-800/80'}`}>
-                      {currentBrands.map((brand) => {
-                        const isSectionHeader = ['header_fnb', 'header_retail'].includes(brand.category);
-                        const isTotal = brand.category === 'total';
-                        const isHighlighted = highlightedBrandRow === brand.id;
-
-                        if (isSectionHeader) {
-                          return (
-                            <tr key={brand.id} className={isLightMode ? 'bg-slate-200/80' : 'bg-slate-800/80'}>
-                              <td
-                                colSpan={brandYears.length + 1}
-                                className={`py-2 px-4 font-bold text-xs uppercase tracking-wider ${
-                                  isLightMode ? 'text-slate-800' : 'text-slate-200'
-                                }`}
-                              >
-                                <span>{brand.name}</span>
-                              </td>
-                            </tr>
-                          );
-                        }
-
-                        return (
-                          <tr
-                            key={brand.id}
-                            className={`transition-colors ${
-                              isHighlighted
-                                ? (isLightMode ? 'bg-blue-100/70' : 'bg-blue-900/30')
-                                : isTotal
-                                ? (isLightMode ? 'bg-slate-100 font-bold text-slate-900 border-t-2 border-slate-300' : 'bg-[#141E2E] font-bold text-slate-100 border-t-2 border-slate-700')
-                                : (isLightMode ? 'hover:bg-slate-50 text-slate-700' : 'hover:bg-slate-800/40 text-slate-300')
-                            }`}
-                          >
-                            <td className={`py-2.5 px-4 border-r flex items-center justify-between ${
-                              isLightMode ? 'border-slate-200' : 'border-slate-800/80'
-                            }`}>
-                              <span className={['fnb_new', 'retail_new'].includes(brand.category) ? 'pl-4' : isTotal ? 'font-black tracking-wider' : 'font-semibold'}>
-                                {brand.name}
-                              </span>
-                              {brand.category === 'existing' && (
-                                <span className="text-[9px] px-1.5 py-0.5 rounded font-medium bg-blue-500/10 text-blue-500 border border-blue-500/20">
-                                  Core
-                                </span>
-                              )}
-                              {brand.category === 'fnb_new' && (
-                                <span className="text-[9px] px-1.5 py-0.5 rounded font-medium bg-amber-500/10 text-amber-500 border border-amber-500/20">
-                                  New F&B
-                                </span>
-                              )}
-                              {brand.category === 'retail_new' && (
-                                <span className="text-[9px] px-1.5 py-0.5 rounded font-medium bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
-                                  New Retail
-                                </span>
-                              )}
-                            </td>
-
-                            {brandYears.map((year) => {
-                              const valBn = brand.valuesBn[year] ?? 0;
-                              const valIdr = brand.valuesIdr[year] ?? 0;
-                              const growth = brand.growthPct?.[year];
-
-                              return (
-                                <td
-                                  key={year}
-                                  className={`py-1.5 px-2.5 border-r text-right ${
-                                    isLightMode ? 'border-slate-200' : 'border-slate-800/80'
-                                  }`}
-                                >
-                                  {isTotal ? (
-                                    <div className="flex flex-col items-end">
-                                      <span className={`font-mono font-black ${isLightMode ? 'text-blue-700' : 'text-blue-400'}`}>
-                                        {brandViewMode === 'full'
-                                          ? valIdr.toLocaleString('id-ID')
-                                          : `${valBn.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 2 })} bn`}
-                                      </span>
-                                      {growth !== undefined && growth !== null && (
-                                        <span className="text-[10px] text-emerald-500 font-semibold">
-                                          +{growth}% YoY
-                                        </span>
-                                      )}
-                                    </div>
-                                  ) : brandViewMode === 'growth' ? (
-                                    <div className="flex items-center justify-end">
-                                      {growth === null || growth === undefined ? (
-                                        <span className="text-slate-400 text-[11px] font-mono">-</span>
-                                      ) : growth < 0 ? (
-                                        <span className="text-[10px] font-bold text-rose-500 bg-rose-500/10 border border-rose-500/20 px-1.5 py-0.5 rounded">
-                                          {growth}%
-                                        </span>
-                                      ) : (
-                                        <span className="text-[10px] font-bold text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded">
-                                          +{growth}%
-                                        </span>
-                                      )}
-                                    </div>
-                                  ) : (
-                                    <div className="relative">
-                                      <input
-                                        type="text"
-                                        defaultValue={
-                                          brandViewMode === 'full'
-                                            ? (valIdr > 0 ? valIdr.toLocaleString('id-ID') : '-')
-                                            : (valBn > 0 ? valBn : '-')
-                                        }
-                                        onBlur={(e) => handleBrandCellChange(brand.id, year, e.target.value)}
-                                        className={`w-full text-right font-mono text-xs rounded-lg px-2 py-1 border outline-none transition-all shadow-inner ${cellInputBg}`}
-                                      />
-                                      {growth !== undefined && growth !== null && brandViewMode === 'bn' && valBn > 0 && (
-                                        <span className={`absolute -top-1.5 -left-1 text-[8px] font-bold px-1 rounded shadow-sm ${
-                                          growth < 0
-                                            ? 'bg-rose-500/90 text-white'
-                                            : 'bg-emerald-600 text-white'
-                                        }`}>
-                                          {growth > 0 ? `+${growth}%` : `${growth}%`}
-                                        </span>
-                                      )}
-                                    </div>
-                                  )}
-                                </td>
-                              );
-                            })}
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+                {!hasMounted ? <GridPlaceholder /> : (
+                <BrandMatrixGrid
+                  brands={currentBrands}
+                  years={BRAND_YEARS}
+                  mode={brandViewMode}
+                  isLightMode={isLightMode}
+                  flashKeys={brandEditor.flashKeys}
+                  onEdits={brandEditor.onEdits}
+                  onUndo={brandEditor.onUndo}
+                  onRedo={brandEditor.onRedo}
+                />
+                )}
               </div>
 
               {/* Division Macro Trajectory Chart */}
@@ -893,11 +681,7 @@ export default function AdminPage() {
                         <div className="flex items-center gap-2">
                           {!isCurrent && (
                             <button
-                              onClick={() => {
-                                setActiveScenarioSlug(sc.slug);
-                                setDataset(sc);
-                                setScenarioTitle(sc.title);
-                              }}
+                              onClick={() => loadIntoEditor(sc)}
                               className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all ${
                                 isLightMode
                                   ? 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
@@ -908,7 +692,7 @@ export default function AdminPage() {
                             </button>
                           )}
                           <button
-                            onClick={() => router.push(`/p/${sc.slug}`)}
+                            onClick={() => router.push(`/deck/${sc.slug}?slide=highlights`)}
                             className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white shadow transition-all active:scale-95"
                           >
                             <ExternalLink size={13} />
@@ -929,6 +713,62 @@ export default function AdminPage() {
           )}
 
         </div>
+
+        {showRestoreDefault && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/65 p-4 backdrop-blur-sm" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) closeRestoreDefault(); }}>
+            <section
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="restore-default-title"
+              className={`w-full max-w-md rounded-2xl border p-6 shadow-2xl ${
+                isLightMode ? 'border-slate-200 bg-white text-slate-900' : 'border-slate-700 bg-[#101827] text-white'
+              }`}
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${isLightMode ? 'bg-amber-100 text-amber-700' : 'bg-amber-500/15 text-amber-300'}`}>
+                  <AlertTriangle size={21} />
+                </div>
+                <button type="button" onClick={closeRestoreDefault} aria-label="Close restore warning" className={`rounded-lg p-1.5 ${isLightMode ? 'text-slate-400 hover:bg-slate-100' : 'text-slate-400 hover:bg-slate-800'}`}><X size={17} /></button>
+              </div>
+
+              <h2 id="restore-default-title" className="mt-4 text-lg font-bold">Restore original default data?</h2>
+              <p className={`mt-2 text-sm leading-6 ${isLightMode ? 'text-slate-600' : 'text-slate-300'}`}>
+                This replaces all P&amp;L figures and the Brand Revenue Matrix in <strong>{scenarioTitle}</strong> with the original baseline.
+              </p>
+              <div className={`mt-4 rounded-xl border p-3 text-xs leading-5 ${isLightMode ? 'border-amber-200 bg-amber-50 text-amber-800' : 'border-amber-700/50 bg-amber-950/25 text-amber-200'}`}>
+                Unsaved edits will be discarded. The database is not changed until you click <strong>Save Changes</strong>, so you can review the restored figures first.
+              </div>
+
+              <label htmlFor="restore-default-confirmation" className="mt-5 block text-xs font-semibold">
+                Type <span className="font-mono text-amber-600">DEFAULT</span> to confirm
+              </label>
+              <input
+                id="restore-default-confirmation"
+                autoFocus
+                autoComplete="off"
+                value={restoreConfirmation}
+                onChange={(event) => setRestoreConfirmation(event.target.value)}
+                onKeyDown={(event) => { if (event.key === 'Escape') closeRestoreDefault(); if (event.key === 'Enter' && restoreConfirmation.trim().toUpperCase() === 'DEFAULT') handleRestoreDefault(); }}
+                placeholder="DEFAULT"
+                className={`mt-2 w-full rounded-xl border px-3 py-2.5 font-mono text-sm outline-none focus:ring-2 focus:ring-amber-500/30 ${
+                  isLightMode ? 'border-slate-300 bg-white focus:border-amber-500' : 'border-slate-600 bg-slate-900 focus:border-amber-400'
+                }`}
+              />
+
+              <div className="mt-6 flex justify-end gap-2">
+                <button type="button" onClick={closeRestoreDefault} className={`rounded-lg border px-4 py-2 text-xs font-semibold ${isLightMode ? 'border-slate-300 hover:bg-slate-50' : 'border-slate-600 hover:bg-slate-800'}`}>Cancel</button>
+                <button
+                  type="button"
+                  onClick={handleRestoreDefault}
+                  disabled={restoreConfirmation.trim().toUpperCase() !== 'DEFAULT'}
+                  className="flex items-center gap-1.5 rounded-lg bg-amber-600 px-4 py-2 text-xs font-semibold text-white hover:bg-amber-500 disabled:cursor-not-allowed disabled:opacity-35"
+                >
+                  <RotateCcw size={13} /> Restore Default Data
+                </button>
+              </div>
+            </section>
+          </div>
+        )}
       </div>
     </div>
   );
