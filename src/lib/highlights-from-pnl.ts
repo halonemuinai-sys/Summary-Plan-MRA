@@ -26,12 +26,6 @@ export const PNL_SOURCE_ROWS = {
   eat: 'npat',
 } as const;
 
-/**
- * The first year the slide covers. The plan the deck presents starts in 2026, so the years before it
- * are left to the P&L table and kept off the slide.
- */
-export const HIGHLIGHTS_START_YEAR = '2026';
-
 /** The scenario holding the workbook sheet "PL MRA Group+Holding (Combine)" */
 export const PNL_SOURCE_SLUG = 'mra-altius-base-2025-2031';
 
@@ -154,31 +148,19 @@ export function applyPnlSource(
   highlights: FinancialHighlightsData,
   items: Record<string, FinancialRowData> | undefined
 ): FinancialHighlightsData {
-  const covered = <T extends { year: string }>(points: T[]) =>
-    points.filter((point) => {
-      const year = calendarYear(point.year);
-      return year === null || year >= HIGHLIGHTS_START_YEAR;
-    });
-
-  const trimmed = {
-    ...highlights,
-    revenueTrajectory: covered(highlights.revenueTrajectory),
-    pnlTrajectory: covered(highlights.pnlTrajectory),
-    cashflowTrajectory: covered(highlights.cashflowTrajectory),
-  };
-  if (!items) return trimmed;
+  if (!items) return highlights;
 
   const { revenueTrajectory, pnlTrajectory } = deriveTrajectories(
-    trimmed.revenueTrajectory,
-    trimmed.pnlTrajectory,
+    highlights.revenueTrajectory,
+    highlights.pnlTrajectory,
     items
   );
 
   return {
-    ...trimmed,
+    ...highlights,
     revenueTrajectory,
     pnlTrajectory,
     marginsTrajectory: deriveMargins(revenueTrajectory, pnlTrajectory),
-    kpis: deriveKpis(trimmed.kpis, revenueTrajectory, pnlTrajectory),
+    kpis: deriveKpis(highlights.kpis, revenueTrajectory, pnlTrajectory),
   };
 }

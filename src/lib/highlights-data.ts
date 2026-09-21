@@ -10,6 +10,10 @@ export const INITIAL_HIGHLIGHTS_DATA: FinancialHighlightsData = {
     gpm: { value: 49.5, unit: '%', yoyDiff: -0.2, yoyText: 'vs FY29F' },
   },
   revenueTrajectory: [
+    { year: 'FY22', value: 582, isForecast: false },
+    { year: 'FY23', value: 598, isForecast: false },
+    { year: 'FY24', value: 632, isForecast: false },
+    { year: 'FY25F', value: 682, isForecast: false },
     { year: 'FY26F', value: 1193, isForecast: true },
     { year: 'FY27F', value: 1498, isForecast: true },
     { year: 'FY28F', value: 1861, isForecast: true },
@@ -17,6 +21,10 @@ export const INITIAL_HIGHLIGHTS_DATA: FinancialHighlightsData = {
     { year: 'FY30F', value: 2763, isForecast: true },
   ],
   pnlTrajectory: [
+    { year: 'FY22', gp: 310, ebitda: 109, ebit: -3, eat: 43 },
+    { year: 'FY23', gp: 315, ebitda: 62, ebit: 14, eat: -4 },
+    { year: 'FY24', gp: 349, ebitda: 95, ebit: 37, eat: 21 },
+    { year: 'FY25F', gp: 352, ebitda: 86, ebit: 55, eat: 18 },
     { year: 'FY26F', gp: 579, ebitda: 167, ebit: 103, eat: 54 },
     { year: 'FY27F', gp: 748, ebitda: 222, ebit: 139, eat: 83 },
     { year: 'FY28F', gp: 925, ebitda: 278, ebit: 179, eat: 112 },
@@ -24,6 +32,10 @@ export const INITIAL_HIGHLIGHTS_DATA: FinancialHighlightsData = {
     { year: 'FY30F', gp: 1368, ebitda: 407, ebit: 290, eat: 187 },
   ],
   marginsTrajectory: [
+    { year: 'FY22', gpm: 53.3, ebitdam: 18.7, ebitm: 5.7, eatm: -0.5 },
+    { year: 'FY23', gpm: 52.6, ebitdam: 10.4, ebitm: 2.3, eatm: -1.4 },
+    { year: 'FY24', gpm: 55.3, ebitdam: 15.1, ebitm: 5.9, eatm: 3.2 },
+    { year: 'FY25F', gpm: 51.6, ebitdam: 12.6, ebitm: 8.1, eatm: 2.7 },
     { year: 'FY26F', gpm: 48.5, ebitdam: 14.0, ebitm: 8.6, eatm: 4.5 },
     { year: 'FY27F', gpm: 49.9, ebitdam: 14.8, ebitm: 9.2, eatm: 5.6 },
     { year: 'FY28F', gpm: 49.7, ebitdam: 14.9, ebitm: 9.6, eatm: 6.0 },
@@ -31,6 +43,9 @@ export const INITIAL_HIGHLIGHTS_DATA: FinancialHighlightsData = {
     { year: 'FY30F', gpm: 49.5, ebitdam: 14.7, ebitm: 10.5, eatm: 6.8 },
   ],
   cashflowTrajectory: [
+    { year: 'FY23', cfo: 73, cfi: -82, cff: -11 },
+    { year: 'FY24', cfo: 53, cfi: -76, cff: 13 },
+    { year: 'FY25F', cfo: 116, cfi: -33, cff: -51 },
     { year: 'FY26F', cfo: -78, cfi: -119, cff: 214 },
     { year: 'FY27F', cfo: 89, cfi: -189, cff: 160 },
     { year: 'FY28F', cfo: 179, cfi: -156, cff: 18 },
