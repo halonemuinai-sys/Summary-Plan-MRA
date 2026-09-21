@@ -219,9 +219,10 @@ export default function AdminPage() {
   };
 
   const handleCopyLink = () => {
-    const fullUrl = origin
-      ? `${origin}/deck/${activeScenarioSlug}?slide=highlights`
+    const path = activeTab === 'grid'
+      ? `/p/${activeScenarioSlug}`
       : `/deck/${activeScenarioSlug}?slide=highlights`;
+    const fullUrl = `${origin}${path}`;
     navigator.clipboard.writeText(fullUrl);
     setCopiedLink(true);
     setTimeout(() => setCopiedLink(false), 2000);
@@ -363,11 +364,11 @@ export default function AdminPage() {
                       {isSaving ? 'Saving...' : 'Save Changes'}
                     </button>
                     <button
-                      onClick={() => router.push(`/deck/${activeScenarioSlug}?slide=highlights`)}
+                      onClick={() => router.push(`/p/${activeScenarioSlug}`)}
                       className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white transition-all shadow-sm active:scale-95 cursor-pointer"
                     >
                       <ExternalLink size={13} />
-                      View Deck
+                      View P&L Deck
                     </button>
                   </div>
                 </div>

@@ -210,6 +210,15 @@ export default function Sidebar({
           )}
           <div className="space-y-1.5">
             <Link
+              href={`/p/${activeScenarioSlug}`}
+              title="P&L Group + Holding"
+              aria-label="P&L Group + Holding"
+              className={`flex items-center rounded-xl text-xs font-bold gap-3 py-3 ${isCollapsed ? 'justify-center px-2' : 'px-3.5'} ${isLightMode ? 'text-blue-700 bg-blue-50 border border-blue-200 hover:bg-blue-100' : 'text-blue-400 bg-blue-950/20 border border-blue-800/40 hover:bg-blue-900/30'}`}
+            >
+              <MonitorPlay size={16} className="shrink-0" />
+              {!isCollapsed && <><span className="flex-1">P&L Group + Holding</span><ArrowUpRight size={14} /></>}
+            </Link>
+            <Link
               href={`/deck/${activeScenarioSlug}?slide=highlights`}
               className={`flex items-center rounded-xl text-xs font-bold transition-all relative group overflow-hidden ${
                 isCollapsed ? 'justify-center p-3' : 'gap-3 px-3.5 py-3'
