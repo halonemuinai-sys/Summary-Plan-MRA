@@ -893,3 +893,38 @@ body {
 .revenue-focus-chip:hover span {
   opacity: 1;
 }
+
+/* ------------------------------------------------------------------ */
+/* Singling out one line of the Margins Trajectory                     */
+/* ------------------------------------------------------------------ */
+/* The stroke and the dots are widened here rather than through props, so Recharts keeps the paths it
+   already drew and the change is a transition instead of the lines drawing themselves again. */
+.margins-chart {
+  cursor: pointer;
+}
+.margins-chart .recharts-line,
+.margins-chart .recharts-label-list {
+  transition: opacity 0.35s ease;
+}
+.margins-chart .recharts-line .recharts-curve,
+.margins-chart .recharts-line .recharts-dot {
+  transition: stroke-width 0.3s ease, r 0.3s ease;
+}
+.margins-chart[data-focus] .recharts-line:not(.is-focused) {
+  opacity: 0.16;
+}
+.margins-chart .recharts-line.is-focused .recharts-curve {
+  stroke-width: 4;
+}
+.margins-chart .recharts-line.is-focused .recharts-dot {
+  r: 4.5;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .margins-chart .recharts-line,
+  .margins-chart .recharts-label-list,
+  .margins-chart .recharts-line .recharts-curve,
+  .margins-chart .recharts-line .recharts-dot {
+    transition: none;
+  }
+}
