@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { FinancialHighlightsData } from '@/lib/types';
 import { INITIAL_HIGHLIGHTS_DATA } from '@/lib/highlights-data';
+import { useDeckExport } from '@/components/DeckExportContext';
 import HighlightsTooltip from '@/components/HighlightsTooltip';
 import { formatHighlightValue } from '@/lib/highlights-format';
 
@@ -29,6 +30,8 @@ const SERIES_LIGHT: SeriesColours = { gp: '#1baf7a', ebitda: '#2a78d6', ebit: '#
 const SERIES_DARK: SeriesColours = { gp: '#199e70', ebitda: '#3987e5', ebit: '#d95926', eat: '#9085e9' };
 
 export default function FinancialHighlightsPage() {
+  const exportSlide = useDeckExport();
+  const [loadError, setLoadError] = useState(false);
   const [data, setData] = useState<FinancialHighlightsData>(INITIAL_HIGHLIGHTS_DATA);
   const [unitMode, setUnitMode] = useState<'bn' | 'mn'>('bn');
   const [filterMode, setFilterMode] = useState<'all' | 'actual' | 'forecast'>('all');
@@ -42,13 +45,16 @@ export default function FinancialHighlightsPage() {
       try {
         setLoading(true);
         const res = await fetch('/api/highlights');
+        if (!res.ok) throw new Error('Highlights could not be loaded');
         if (res.ok) {
           const json = await res.json();
+          if (!json.data) throw new Error('Highlights are unavailable');
           if (json.data) {
             setData(json.data);
           }
         }
       } catch (e) {
+        setLoadError(true);
         console.error('Error fetching highlights:', e);
       } finally {
         setLoading(false);
@@ -59,6 +65,7 @@ export default function FinancialHighlightsPage() {
 
   // Hotkeys
   useEffect(() => {
+    if (exportSlide) return;
     function handleKey(e: KeyboardEvent) {
       if ((e.target as HTMLElement)?.closest('input, select, textarea, [contenteditable="true"]')) return;
       if (e.key === 't' || e.key === 'T') {
@@ -119,7 +126,7 @@ export default function FinancialHighlightsPage() {
   const series = isLightMode ? SERIES_LIGHT : SERIES_DARK;
 
   return (
-    <div className={`highlights-presentation min-h-screen ${pageBg} flex flex-col justify-between p-4 lg:p-6 select-none font-sans transition-colors duration-300`}>
+    <div data-export-ready={!loading && !loadError} data-export-error={loadError} className={`highlights-presentation min-h-screen ${pageBg} flex flex-col justify-between p-4 lg:p-6 select-none font-sans transition-colors duration-300`}>
       {/* SVG Defs for striped forecast bars */}
       <svg className="h-0 w-0 absolute">
         <defs>
@@ -391,7 +398,7 @@ export default function FinancialHighlightsPage() {
                   name="Revenue"
                   radius={[4, 4, 0, 0]}
                   maxBarSize={48}
-                  isAnimationActive={true}
+                  isAnimationActive={!exportSlide}
                 >
                   {formattedRevenue.map((point) => (
                     <Cell
@@ -440,16 +447,16 @@ export default function FinancialHighlightsPage() {
                 <YAxis stroke={axisColor} fontSize={11} tickLine={false} />
                 <ReferenceLine y={0} stroke={axisColor} />
                 <Tooltip isAnimationActive={false} offset={16} cursor={{ stroke: isLightMode ? "#94b8ae" : "#4f766e", strokeWidth: 1, fill: isLightMode ? "rgba(13,148,136,0.045)" : "rgba(45,212,191,0.06)" }} wrapperStyle={{ outline: "none", zIndex: 50 }} content={<HighlightsTooltip variant="pnl" unit={unitLabel} light={isLightMode} trajectory={data.revenueTrajectory} />} />
-                <Bar dataKey="gp" name="GP" fill={series.gp} radius={[3, 3, 0, 0]}>
+                <Bar isAnimationActive={!exportSlide} dataKey="gp" name="GP" fill={series.gp} radius={[3, 3, 0, 0]}>
                   <LabelList dataKey="gp" position="top" fill={axisColor} fontSize={10} formatter={formatHighlightValue} />
                 </Bar>
-                <Bar dataKey="ebitda" name="EBITDA" fill={series.ebitda} radius={[3, 3, 0, 0]}>
+                <Bar isAnimationActive={!exportSlide} dataKey="ebitda" name="EBITDA" fill={series.ebitda} radius={[3, 3, 0, 0]}>
                   <LabelList dataKey="ebitda" position="top" fill={axisColor} fontSize={10} formatter={formatHighlightValue} />
                 </Bar>
-                <Bar dataKey="ebit" name="EBIT" fill={series.ebit} radius={[3, 3, 0, 0]}>
+                <Bar isAnimationActive={!exportSlide} dataKey="ebit" name="EBIT" fill={series.ebit} radius={[3, 3, 0, 0]}>
                   <LabelList dataKey="ebit" position="top" fill={axisColor} fontSize={10} formatter={formatHighlightValue} />
                 </Bar>
-                <Bar dataKey="eat" name="EAT" fill={series.eat} radius={[3, 3, 0, 0]}>
+                <Bar isAnimationActive={!exportSlide} dataKey="eat" name="EAT" fill={series.eat} radius={[3, 3, 0, 0]}>
                   <LabelList dataKey="eat" position="top" fill={axisColor} fontSize={10} formatter={formatHighlightValue} />
                 </Bar>
               </BarChart>
@@ -489,13 +496,13 @@ export default function FinancialHighlightsPage() {
                 <YAxis stroke={axisColor} fontSize={11} tickLine={false} unit="%" domain={[-10, 60]} />
                 <ReferenceLine y={0} stroke={axisColor} />
                 <Tooltip isAnimationActive={false} offset={16} cursor={{ stroke: isLightMode ? "#94b8ae" : "#4f766e", strokeWidth: 1, fill: isLightMode ? "rgba(13,148,136,0.045)" : "rgba(45,212,191,0.06)" }} wrapperStyle={{ outline: "none", zIndex: 50 }} content={<HighlightsTooltip variant="margins" unit={unitLabel} light={isLightMode} trajectory={data.revenueTrajectory} />} />
-                <Line type="monotone" dataKey="gpm" name="GPM" stroke={series.gp} strokeWidth={2.5} dot={{ r: 3 }}>
+                <Line isAnimationActive={!exportSlide} type="monotone" dataKey="gpm" name="GPM" stroke={series.gp} strokeWidth={2.5} dot={{ r: 3 }}>
                 </Line>
-                <Line type="monotone" dataKey="ebitdam" name="EBITDAM" stroke={series.ebitda} strokeWidth={2.5} dot={{ r: 3 }}>
+                <Line isAnimationActive={!exportSlide} type="monotone" dataKey="ebitdam" name="EBITDAM" stroke={series.ebitda} strokeWidth={2.5} dot={{ r: 3 }}>
                 </Line>
-                <Line type="monotone" dataKey="ebitm" name="EBITM" stroke={series.ebit} strokeWidth={2} dot={{ r: 3 }}>
+                <Line isAnimationActive={!exportSlide} type="monotone" dataKey="ebitm" name="EBITM" stroke={series.ebit} strokeWidth={2} dot={{ r: 3 }}>
                 </Line>
-                <Line type="monotone" dataKey="eatm" name="EATM" stroke={series.eat} strokeWidth={2} dot={{ r: 3 }}>
+                <Line isAnimationActive={!exportSlide} type="monotone" dataKey="eatm" name="EATM" stroke={series.eat} strokeWidth={2} dot={{ r: 3 }}>
                 </Line>
               </LineChart>
             </ResponsiveContainer>

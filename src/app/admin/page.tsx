@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Save, PlusCircle, ExternalLink, Copy, Check,
-  Edit3, Sparkles, CheckCircle2,
+  Edit3, Sparkles,
   Table2, Layers, FolderKanban, TrendingUp, CheckCircle,
   Percent, Coins, Building2, ArrowUpRight, AlertTriangle, RotateCcw, X
 } from 'lucide-react';
@@ -23,7 +23,7 @@ import GridHelp from '@/components/admin/GridHelp';
 import { EditHistoryButtons, UnsavedBadge } from '@/components/admin/EditToolbar';
 import PnlGrid from '@/components/admin/PnlGrid';
 import BrandMatrixGrid from '@/components/admin/BrandMatrixGrid';
-import confetti from 'canvas-confetti';
+import SaveNotification from '@/components/admin/SaveNotification';
 
 const GridPlaceholder = () => (
   <div className="h-64 flex items-center justify-center text-xs text-slate-400">Loading spreadsheet...</div>
@@ -38,6 +38,13 @@ export default function AdminPage() {
   const [newSlug, setNewSlug] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+
+  useEffect(() => {
+    if (!saveSuccess) return;
+    const timer = setTimeout(() => setSaveSuccess(false), 3500);
+    return () => clearTimeout(timer);
+  }, [saveSuccess]);
+
   const [copiedLink, setCopiedLink] = useState(false);
   const [scenariosList, setScenariosList] = useState<ScenarioDataset[]>([INITIAL_DATASET]);
   const [isDirty, setIsDirty] = useState(false);
@@ -127,16 +134,6 @@ export default function AdminPage() {
     }
   };
 
-  const triggerCelebration = () => {
-    try {
-      confetti({
-        particleCount: 80,
-        spread: 70,
-        origin: { y: 0.6 },
-      });
-    } catch (e) {}
-  };
-
   // Load a saved scenario into the editor: start with a clean undo history and nothing unsaved
   const loadIntoEditor = (scenario: ScenarioDataset) => {
     setActiveScenarioSlug(scenario.slug);
@@ -163,6 +160,7 @@ export default function AdminPage() {
       updatedAt: new Date().toISOString(),
     };
 
+    setSaveSuccess(false);
     setIsSaving(true);
     try {
       const res = await fetch('/api/scenarios', {
@@ -177,8 +175,6 @@ export default function AdminPage() {
         setActiveScenarioSlug(cleanSlug);
         setNewSlug('');
         fetchScenarios();
-        triggerCelebration();
-        setTimeout(() => setSaveSuccess(false), 4000);
       }
     } catch (err) {
       console.error('Error saving scenario:', err);
@@ -189,6 +185,7 @@ export default function AdminPage() {
   };
 
   const handleUpdateCurrent = async () => {
+    setSaveSuccess(false);
     setIsSaving(true);
     try {
       const updated: ScenarioDataset = {
@@ -207,8 +204,6 @@ export default function AdminPage() {
         setSaveSuccess(true);
         setIsDirty(false);
         fetchScenarios();
-        triggerCelebration();
-        setTimeout(() => setSaveSuccess(false), 3000);
       }
     } catch (err) {
       console.error('Error updating scenario:', err);
@@ -277,6 +272,7 @@ export default function AdminPage() {
 
   return (
     <div className={`min-h-screen ${pageBg} flex transition-colors duration-300 selection:bg-blue-600 selection:text-white`}>
+      <SaveNotification visible={saveSuccess} isLightMode={isLightMode} message="Your scenario is ready to present." />
       {/* Side Menu */}
       <Sidebar
         activeTab={activeTab}
@@ -621,11 +617,6 @@ export default function AdminPage() {
                       <PlusCircle className="w-3.5 h-3.5" />
                       {isSaving ? 'Publishing...' : 'Publish as New Scenario Link'}
                     </button>
-                    {saveSuccess && (
-                      <div className="text-[11px] text-emerald-500 flex items-center justify-center gap-1 font-medium animate-pulse">
-                        <CheckCircle2 className="w-3.5 h-3.5" /> Scenario saved successfully!
-                      </div>
-                    )}
                   </div>
                 </div>
               </div>

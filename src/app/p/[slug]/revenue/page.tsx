@@ -6,6 +6,7 @@ import Image from 'next/image';
 import { useParams, useSearchParams } from 'next/navigation';
 import { BarChart, Bar, CartesianGrid, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { ArrowLeft, Layers, ShoppingBag, UtensilsCrossed, Radio, Maximize2, Printer } from 'lucide-react';
+import { useDeckExport } from '@/components/DeckExportContext';
 import { ScenarioDataset } from '@/lib/types';
 import { buildRevenueBreakdown, revenuePercentage, revenueSeries, RevenuePanel, RevenuePoint } from '@/lib/revenue-breakdown';
 
@@ -99,7 +100,8 @@ function RevenueChart({ panel, rows, multiplier, unit, percentage }: { panel: Re
 export default function RevenuePresentation() {
   const { slug } = useParams<{ slug: string }>();
   const searchParams = useSearchParams();
-  const percentage = (searchParams.get('slide') ?? searchParams.get('view')) === 'percentage';
+  const exportSlide = useDeckExport();
+  const percentage = (exportSlide ?? searchParams.get('slide') ?? searchParams.get('view')) === 'percentage';
   const [dataset, setDataset] = useState<ScenarioDataset | null>(null);
   const [error, setError] = useState('');
   const [period, setPeriod] = useState('all');
@@ -117,14 +119,14 @@ export default function RevenuePresentation() {
   const years = breakdown.years.filter(y => period === 'all' || Number(y) <= 2030);
   const unitLabel = percentage ? '%' : unit === 'bn' ? 'IDR Bn' : 'IDR Mn';
   const unavailable = dataset && (!breakdown.years.length || breakdown.unmapped.length > 0);
-  return <main className="revenue-deck min-h-screen bg-[#f5f9fb] text-[#101b40] p-5 xl:px-7">
+  return <main data-export-ready={Boolean(dataset && !error && !unavailable)} data-export-error={Boolean(error || unavailable)} className="revenue-deck min-h-screen bg-[#f5f9fb] text-[#101b40] p-5 xl:px-7">
     <nav className="revenue-tools flex items-center justify-between text-xs text-slate-500 mb-4"><Link href={`/p/${slug}`} className="flex gap-2 items-center hover:text-emerald-700"><ArrowLeft size={14} />P&L Deck</Link><div className="flex gap-4"><button onClick={() => window.print()} className="flex gap-1 items-center"><Printer size={14} />Print / PDF</button><button onClick={() => { if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); else document.documentElement.requestFullscreen().catch(() => {}); }} className="flex gap-1 items-center"><Maximize2 size={14} />Fullscreen</button></div></nav>
     <header className="flex flex-wrap items-center justify-between gap-5 mb-6"><div className="flex gap-5 items-center"><Image src="/mra-logo-official.svg" alt="MRA Group" width={121} height={52} className="object-contain" unoptimized /><div><h1 className="text-2xl xl:text-4xl font-bold tracking-tight">Revenue Breakdown by {percentage ? 'Percentage' : 'Value'} ({unitLabel})</h1><p className="text-slate-500 mt-1 text-sm">Growth across segments, brands and business units.</p></div></div>
       <div className="flex flex-wrap gap-3"><div className="flex items-center rounded-xl border border-slate-200 bg-white p-1" role="group" aria-label="Revenue presentation view">{(['value', 'percentage'] as const).map(view => <Link key={view} href={`/p/${slug}/revenue?view=${view}`} aria-current={(percentage ? 'percentage' : 'value') === view ? 'page' : undefined} className={`rounded-lg px-3 py-2 text-sm font-semibold ${(percentage ? 'percentage' : 'value') === view ? 'bg-emerald-700 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>{view === 'value' ? 'Value' : 'Percentage'}</Link>)}</div><select aria-label="Period" value={period} onChange={e => setPeriod(e.target.value)} className="bg-white border border-slate-100 rounded-xl p-3 text-sm"><option value="all">{breakdown.years.length ? `FY${breakdown.years[0].slice(-2)}F – FY${breakdown.years.at(-1)?.slice(-2)}F` : 'All available years'}</option><option value="2030">Through FY30F</option></select>{!percentage && <select aria-label="Currency unit" value={unit} onChange={e => setUnit(e.target.value)} className="bg-emerald-50 rounded-xl p-3 text-sm"><option value="bn">IDR Bn</option><option value="mn">IDR Mn</option></select>}</div>
     </header>
     {percentage && <p className="mb-4 text-xs text-slate-500">Segment percentages use total group revenue; brand percentages use their division total for each year. Percentage means revenue share, not YoY growth. Years with a zero or negative total have no percentage mix.</p>}
     {error ? <p role="alert" className="p-8 bg-white rounded-xl">{error} <button className="underline" onClick={() => window.location.reload()}>Coba lagi</button></p> : !dataset ? <p role="status" className="p-8">Memuat data skenario…</p> : unavailable ? <p role="alert" className="p-8 bg-white rounded-xl">{breakdown.unmapped.length ? `Brand belum memiliki pemetaan segmen: ${breakdown.unmapped.join(', ')}.` : 'Rincian brand lengkap belum tersedia untuk skenario ini.'}</p> : <div className="revenue-grid grid grid-cols-1 lg:grid-cols-2 gap-4">{(Object.keys(revenueSeries) as RevenuePanel[]).map(panel => <RevenueChart key={panel} panel={panel} rows={breakdown.panels[panel].filter(r => years.includes(r.year))} multiplier={unit === 'bn' ? 1 : 1000} unit={unitLabel} percentage={percentage} />)}</div>}
-    <footer className="mt-4 flex justify-between items-end gap-4 text-xs text-slate-500"><div><p>{dataset?.title} · Source: saved Brand Revenue Matrix · F = Forecast</p><p className="mt-1">Brand detail available for {breakdown.years[0] ?? '—'}–{breakdown.years.at(-1) ?? '—'}. Broadcast breakdown is unavailable. Totals use unrounded brand values.</p><p className="text-emerald-700 mt-1 text-sm">Strictly Private and Confidential</p></div><Image src="/mra-logo-official.svg" alt="MRA Group" width={82} height={35} className="object-contain shrink-0" unoptimized /></footer>
+    <footer className="mt-4 flex justify-between items-end gap-4 text-xs text-slate-500"><p className="text-emerald-700 mt-1 text-sm">Strictly Private and Confidential</p><Image src="/mra-logo-official.svg" alt="MRA Group" width={82} height={35} className="object-contain shrink-0" unoptimized /></footer>
     <style jsx global>{`@media print { @page { size: A3 landscape; margin: 8mm; } .revenue-tools { display: none !important; } .revenue-deck { padding: 0 !important; print-color-adjust: exact; -webkit-print-color-adjust: exact; } .revenue-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; } .revenue-card { break-inside: avoid; } .revenue-chart { height: 230px !important; min-height: 0 !important; } }`}</style>
   </main>;
 }

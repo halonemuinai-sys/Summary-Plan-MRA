@@ -557,6 +557,11 @@ body {
 .unified-deck-footer p span { padding: 0 8px; }
 .unified-deck-footer button:disabled { opacity: .3; cursor: not-allowed; }
 .unified-deck-notice { padding: 6px 24px; color: #f7d39d; font-size: 12px; }
+.unified-deck-actions button:disabled { opacity: .6; cursor: wait; }
+.deck-pdf-export { position: fixed; left: -20000px; top: 0; width: 1600px; pointer-events: none; }
+.deck-pdf-export .unified-slide { position: relative; inset: auto; transform: none; overflow: hidden; }
+.deck-pdf-export select { display: none; }
+.deck-pdf-export *, .deck-pdf-export *::before, .deck-pdf-export *::after { animation: none !important; transition: none !important; }
 @media (max-width: 800px) { .unified-deck-heading > div, .unified-deck-actions span, .unified-deck-footer p, .unified-deck-footer > div > span { display: none; } .unified-deck-toolbar, .unified-deck-footer { padding: 10px; gap: 8px; } .unified-deck-tabs button { padding: 8px; gap: 5px; } }
 
 /* ------------------------------------------------------------------ */

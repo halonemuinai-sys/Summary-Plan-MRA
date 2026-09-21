@@ -3,11 +3,11 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  Save, RotateCcw, ExternalLink, Sparkles, CheckCircle2,
+  Save, RotateCcw, ExternalLink, Sparkles,
   BarChart3, Coins, TrendingUp, Percent, FileText,
   DollarSign, Activity, Check
 } from 'lucide-react';
-import confetti from 'canvas-confetti';
+import SaveNotification from '@/components/admin/SaveNotification';
 import { FinancialHighlightsData } from '@/lib/types';
 import { INITIAL_HIGHLIGHTS_DATA } from '@/lib/highlights-data';
 import { useEditHistory } from '@/lib/use-edit-history';
@@ -56,6 +56,13 @@ export default function HighlightsStudio({ isLightMode = true }: HighlightsStudi
   const [highlightsData, setHighlightsData] = useState<FinancialHighlightsData>(INITIAL_HIGHLIGHTS_DATA);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+
+  useEffect(() => {
+    if (!saveSuccess) return;
+    const timer = setTimeout(() => setSaveSuccess(false), 3500);
+    return () => clearTimeout(timer);
+  }, [saveSuccess]);
+
   const [loading, setLoading] = useState(true);
 
   // Undo/redo for the figures typed into the grids. Plain text fields keep the browser's own undo.
@@ -96,6 +103,7 @@ export default function HighlightsStudio({ isLightMode = true }: HighlightsStudi
 
   // Save to PostgreSQL
   const handleSave = async () => {
+    setSaveSuccess(false);
     setIsSaving(true);
     try {
       const res = await fetch('/api/highlights', {
@@ -106,14 +114,6 @@ export default function HighlightsStudio({ isLightMode = true }: HighlightsStudi
 
       if (res.ok) {
         setSaveSuccess(true);
-        try {
-          confetti({
-            particleCount: 80,
-            spread: 70,
-            origin: { y: 0.6 },
-          });
-        } catch (e) {}
-        setTimeout(() => setSaveSuccess(false), 3500);
       } else {
         alert('Failed to save to database');
       }
@@ -268,7 +268,7 @@ export default function HighlightsStudio({ isLightMode = true }: HighlightsStudi
               className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-500 text-white shadow-md shadow-blue-600/30 transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
             >
               <Save size={14} />
-              {isSaving ? 'Saving to DB...' : 'Save Highlights'}
+              {isSaving ? 'Saving...' : 'Save Highlights'}
             </button>
 
             <button
@@ -281,12 +281,7 @@ export default function HighlightsStudio({ isLightMode = true }: HighlightsStudi
           </div>
         </div>
 
-        {saveSuccess && (
-          <div className="mt-4 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-500 text-xs font-semibold flex items-center gap-2">
-            <CheckCircle2 size={16} />
-            Highlights saved successfully to PostgreSQL! Ready for presentation at /highlights.
-          </div>
-        )}
+        <SaveNotification visible={saveSuccess} isLightMode={isLightMode} message="Financial Highlights are ready to present." />
       </div>
 
       {/* 1. TOP 4 KPI CARDS (FY30F) */}
