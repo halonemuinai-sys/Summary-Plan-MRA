@@ -92,14 +92,21 @@ export default function FinancialHighlightsPage() {
     }
   };
 
+  // The slide starts at FY26F, so every year on it is a forecast. Telling Actual from Forecast only
+  // says something while both are there.
+  const hasActual = data.revenueTrajectory.some((pt) => !pt.isForecast);
+  const hasForecast = data.revenueTrajectory.some((pt) => pt.isForecast);
+  const canFilter = hasActual && hasForecast;
+  const shownFilter = canFilter ? filterMode : 'all';
+
   const scaleMultiplier = unitMode === 'mn' ? 1000 : 1;
   const unitLabel = unitMode === 'mn' ? 'IDR Mn' : 'IDR Bn';
 
   // Format data according to unit and filter
   const formattedRevenue = data.revenueTrajectory
     .filter((pt) => {
-      if (filterMode === 'actual') return !pt.isForecast;
-      if (filterMode === 'forecast') return pt.isForecast;
+      if (shownFilter === 'actual') return !pt.isForecast;
+      if (shownFilter === 'forecast') return pt.isForecast;
       return true;
     })
     .map((pt) => ({
@@ -197,17 +204,19 @@ export default function FinancialHighlightsPage() {
           </div>
 
           {/* Actual & Forecast Filter Dropdown */}
-          <select
-            value={filterMode}
-            onChange={(e) => setFilterMode(e.target.value as any)}
-            className={`text-xs rounded-lg border px-3 py-1.5 font-semibold outline-none transition-colors ${
-              isLightMode ? 'bg-white border-slate-300 text-slate-700' : 'bg-slate-900 border-slate-700 text-white'
-            }`}
-          >
-            <option value="all">Actual & Forecast</option>
-            <option value="actual">Actual Only</option>
-            <option value="forecast">Forecast Only</option>
-          </select>
+          {canFilter && (
+            <select
+              value={filterMode}
+              onChange={(e) => setFilterMode(e.target.value as any)}
+              className={`text-xs rounded-lg border px-3 py-1.5 font-semibold outline-none transition-colors ${
+                isLightMode ? 'bg-white border-slate-300 text-slate-700' : 'bg-slate-900 border-slate-700 text-white'
+              }`}
+            >
+              <option value="all">Actual &amp; Forecast</option>
+              <option value="actual">Actual Only</option>
+              <option value="forecast">Forecast Only</option>
+            </select>
+          )}
 
           {/* Theme Switcher */}
           <button
@@ -377,14 +386,18 @@ export default function FinancialHighlightsPage() {
             </div>
 
             <div className="flex items-center gap-3 text-xs">
-              <div className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full" style={{ background: series.gp }} />
-                <span className="text-[11px] text-slate-500">Actual</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded" style={{ border: `1px solid ${series.gp}`, background: '#8fdcbe' }} />
-                <span className="text-[11px] text-slate-500">Forecast</span>
-              </div>
+              {hasActual && (
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full" style={{ background: series.gp }} />
+                  <span className="text-[11px] text-slate-500">Actual</span>
+                </div>
+              )}
+              {hasForecast && (
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded" style={{ border: `1px solid ${series.gp}`, background: '#8fdcbe' }} />
+                  <span className="text-[11px] text-slate-500">Forecast</span>
+                </div>
+              )}
             </div>
           </div>
 
