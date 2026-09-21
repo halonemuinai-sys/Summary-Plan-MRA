@@ -8,6 +8,7 @@ import 'react-datasheet-grid/dist/style.css';
 import clsx from 'clsx';
 import { formatBn, formatPct } from '@/lib/number-format';
 import { YearField, yearField } from '@/lib/grid-fields';
+import { Lock } from 'lucide-react';
 import { LabelHeader, makeNumberColumn, useGridUndoKeys } from './grid-shared';
 
 const ROW_HEIGHT = 38;
@@ -39,18 +40,21 @@ interface HighlightsMatrixProps {
   /** Shown under the first column header, e.g. "IDR Billion" */
   caption: string;
   isLightMode: boolean;
-  onEdit: (field: string, year: string, value: number) => void;
+  onEdit?: (field: string, year: string, value: number) => void;
+  /** Figures worked out from other tables: shown, never typed into */
+  readOnly?: boolean;
   /** When given, each year header carries a button that switches it between Actual and Forecast */
   onToggleForecast?: (year: string) => void;
   onUndo: () => void;
   onRedo: () => void;
 }
 
-function LabelCell({ rowData }: CellProps<MatrixGridRow>) {
+function LabelCell({ rowData, columnData }: CellProps<MatrixGridRow, { readOnly?: boolean }>) {
   return (
-    <div className="pnl-label">
+    <div className={clsx('pnl-label', columnData?.readOnly && 'pnl-label-derived')}>
       <span className="pnl-label-text">{rowData.label}</span>
       {rowData.unit === 'pct' && <span className="hl-unit">%</span>}
+      {columnData?.readOnly && <Lock className="pnl-lock" size={11} aria-label="Worked out automatically" />}
     </div>
   );
 }
@@ -63,6 +67,7 @@ export default function HighlightsMatrix({
   caption,
   isLightMode,
   onEdit,
+  readOnly = false,
   onToggleForecast,
   onUndo,
   onRedo,
@@ -115,15 +120,16 @@ export default function HighlightsMatrix({
             ) : (
               <AmountCell {...props} columnData={amount.columnData!} />
             ),
-          cellClassName: () => 'pnl-cell pnl-cell-input',
+          disabled: readOnly,
+          cellClassName: () => (readOnly ? 'pnl-cell pnl-cell-derived' : 'pnl-cell pnl-cell-input'),
         };
       }),
-    [points, onToggleForecast]
+    [points, onToggleForecast, readOnly]
   );
 
   const labelColumn = useMemo(
-    () => ({ ...LABEL_COLUMN_BASE, title: <LabelHeader title="Line" caption={caption} /> }),
-    [caption]
+    () => ({ ...LABEL_COLUMN_BASE, title: <LabelHeader title="Line" caption={caption} />, columnData: { readOnly } }),
+    [caption, readOnly]
   );
 
   const rowsRef = useRef(gridRows);
@@ -136,6 +142,7 @@ export default function HighlightsMatrix({
   // Typing, pasting from Excel, the fill handle and Delete all arrive as a fresh copy of the rows
   const handleChange = useCallback(
     (next: MatrixGridRow[]) => {
+      if (readOnly) return;
       const previous = rowsRef.current;
       next.forEach((row, index) => {
         const before = previous[index];
@@ -149,11 +156,11 @@ export default function HighlightsMatrix({
           const shown = before.unit === 'pct' ? formatPct : formatBn;
           // The grid can hand back its own rounded display text as if it were typed
           if (value === current || shown(value) === shown(current)) continue;
-          onEditRef.current(row.field, point.year, value);
+          onEditRef.current?.(row.field, point.year, value);
         }
       });
     },
-    [points]
+    [points, readOnly]
   );
 
   return (

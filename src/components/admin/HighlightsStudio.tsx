@@ -12,6 +12,7 @@ import { FinancialHighlightsData } from '@/lib/types';
 import { INITIAL_HIGHLIGHTS_DATA } from '@/lib/highlights-data';
 import { useEditHistory } from '@/lib/use-edit-history';
 import { formatForEdit, parseNumberInput } from '@/lib/number-format';
+import { deriveMargins } from '@/lib/highlights-margins';
 import HighlightsMatrix from './HighlightsMatrix';
 import { EditHistoryButtons } from './EditToolbar';
 
@@ -109,7 +110,7 @@ export default function HighlightsStudio({ isLightMode = true }: HighlightsStudi
       const res = await fetch('/api/highlights', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(highlightsData),
+        body: JSON.stringify({ ...highlightsData, marginsTrajectory: margins }),
       });
 
       if (res.ok) {
@@ -180,19 +181,9 @@ export default function HighlightsStudio({ isLightMode = true }: HighlightsStudi
     }));
   };
 
-  const updateMarginsPoint = (
-    year: string,
-    field: 'gpm' | 'ebitdam' | 'ebitm' | 'eatm',
-    value: number
-  ) => {
-    rememberBeforeEdit();
-    setHighlightsData((prev) => ({
-      ...prev,
-      marginsTrajectory: prev.marginsTrajectory.map((pt) =>
-        pt.year === year ? { ...pt, [field]: value } : pt
-      ),
-    }));
-  };
+  // Margins are not typed in: each is a P&L line over that year's revenue. Deriving them here means
+  // the table cannot drift from the two tables it is read off.
+  const margins = deriveMargins(highlightsData.revenueTrajectory, highlightsData.pnlTrajectory);
 
   const updateCashflowPoint = (
     year: string,
@@ -507,7 +498,7 @@ export default function HighlightsStudio({ isLightMode = true }: HighlightsStudi
               <BarChart3 className="w-4 h-4 text-emerald-500" />
               Margins Trajectory
             </h3>
-            <p className="text-xs text-slate-400 mt-0.5">Each margin as a percentage of revenue.</p>
+            <p className="text-xs text-slate-400 mt-0.5">Worked out for you: each line of Gross Profit, EBITDA and Net Profit over that year&apos;s revenue.</p>
           </div>
         </div>
         <HighlightsMatrix
@@ -517,10 +508,10 @@ export default function HighlightsStudio({ isLightMode = true }: HighlightsStudi
             { field: 'ebitm', label: 'Operating Margin', unit: 'pct' },
             { field: 'eatm', label: 'Net Margin', unit: 'pct' },
           ]}
-          points={highlightsData.marginsTrajectory}
+          points={margins}
           caption="Percent of revenue"
           isLightMode={isLightMode}
-          onEdit={(field, year, value) => updateMarginsPoint(year, field as 'gpm' | 'ebitdam' | 'ebitm' | 'eatm', value)}
+          readOnly
           onUndo={onUndo}
           onRedo={onRedo}
         />

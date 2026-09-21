@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { FinancialHighlightsData } from '@/lib/types';
 import { INITIAL_HIGHLIGHTS_DATA } from '@/lib/highlights-data';
+import { deriveMargins } from '@/lib/highlights-margins';
 import { useDeckExport } from '@/components/DeckExportContext';
 import HighlightsTooltip from '@/components/HighlightsTooltip';
 import { formatHighlightValue } from '@/lib/highlights-format';
@@ -106,6 +107,9 @@ export default function FinancialHighlightsPage() {
       actualValue: !pt.isForecast ? pt.value * scaleMultiplier : null,
       forecastValue: pt.isForecast ? pt.value * scaleMultiplier : null,
     }));
+
+  // Margins come from the figures above them rather than a stored copy that could go stale
+  const marginsData = deriveMargins(data.revenueTrajectory, data.pnlTrajectory);
 
   const formattedPnl = data.pnlTrajectory.map((pt) => ({
     year: pt.year,
@@ -490,7 +494,7 @@ export default function FinancialHighlightsPage() {
 
           <div className="flex-1 min-h-[220px]">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={data.marginsTrajectory} margin={{ top: 20, right: 15, left: -10, bottom: 0 }}>
+              <LineChart data={marginsData} margin={{ top: 20, right: 15, left: -10, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} vertical={false} />
                 <XAxis dataKey="year" stroke={axisColor} fontSize={11} tickLine={false} />
                 <YAxis stroke={axisColor} fontSize={11} tickLine={false} unit="%" domain={[-10, 60]} />
