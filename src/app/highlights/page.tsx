@@ -18,7 +18,7 @@ import { INITIAL_HIGHLIGHTS_DATA } from '@/lib/highlights-data';
 import { deriveMargins } from '@/lib/highlights-margins';
 import { useDeckExport } from '@/components/DeckExportContext';
 import HighlightsTooltip from '@/components/HighlightsTooltip';
-import { formatHighlightValue } from '@/lib/highlights-format';
+import { formatHighlightBarLabel, formatHighlightValue } from '@/lib/highlights-format';
 
 // One colour per P&L line, used by every chart on this slide so a series keeps its identity.
 // Checked with the data-viz palette validator on the light surface: lightness band, chroma floor,
@@ -452,16 +452,16 @@ export default function FinancialHighlightsPage() {
                 <ReferenceLine y={0} stroke={axisColor} />
                 <Tooltip isAnimationActive={false} offset={16} cursor={{ stroke: isLightMode ? "#94b8ae" : "#4f766e", strokeWidth: 1, fill: isLightMode ? "rgba(13,148,136,0.045)" : "rgba(45,212,191,0.06)" }} wrapperStyle={{ outline: "none", zIndex: 50 }} content={<HighlightsTooltip variant="pnl" unit={unitLabel} light={isLightMode} trajectory={data.revenueTrajectory} />} />
                 <Bar isAnimationActive={!exportSlide} dataKey="gp" name="GP" fill={series.gp} radius={[3, 3, 0, 0]}>
-                  <LabelList dataKey="gp" position="top" fill={axisColor} fontSize={10} formatter={formatHighlightValue} />
+                  <LabelList dataKey="gp" position="top" fill={axisColor} fontSize={9} formatter={formatHighlightBarLabel} />
                 </Bar>
                 <Bar isAnimationActive={!exportSlide} dataKey="ebitda" name="EBITDA" fill={series.ebitda} radius={[3, 3, 0, 0]}>
-                  <LabelList dataKey="ebitda" position="top" fill={axisColor} fontSize={10} formatter={formatHighlightValue} />
+                  <LabelList dataKey="ebitda" position="top" fill={axisColor} fontSize={9} formatter={formatHighlightBarLabel} />
                 </Bar>
                 <Bar isAnimationActive={!exportSlide} dataKey="ebit" name="EBIT" fill={series.ebit} radius={[3, 3, 0, 0]}>
-                  <LabelList dataKey="ebit" position="top" fill={axisColor} fontSize={10} formatter={formatHighlightValue} />
+                  <LabelList dataKey="ebit" position="top" fill={axisColor} fontSize={9} formatter={formatHighlightBarLabel} />
                 </Bar>
                 <Bar isAnimationActive={!exportSlide} dataKey="eat" name="EAT" fill={series.eat} radius={[3, 3, 0, 0]}>
-                  <LabelList dataKey="eat" position="top" fill={axisColor} fontSize={10} formatter={formatHighlightValue} />
+                  <LabelList dataKey="eat" position="top" fill={axisColor} fontSize={9} formatter={formatHighlightBarLabel} />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>

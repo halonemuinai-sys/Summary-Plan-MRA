@@ -2,6 +2,7 @@ import pool from './db';
 import { ScenarioDataset, FinancialHighlightsData } from './types';
 import { INITIAL_DATASET } from './initial-data';
 import { INITIAL_HIGHLIGHTS_DATA } from './highlights-data';
+import { PNL_SOURCE_SLUG, applyPnlSource } from './highlights-from-pnl';
 
 export async function getAllScenarios(): Promise<ScenarioDataset[]> {
   try {
@@ -98,31 +99,40 @@ export async function saveScenario(dataset: ScenarioDataset): Promise<ScenarioDa
 }
 
 export async function getFinancialHighlights(): Promise<FinancialHighlightsData> {
+  let stored = INITIAL_HIGHLIGHTS_DATA;
   try {
     const res = await pool.query(
       'SELECT data FROM mra.financial_highlights WHERE id = $1 LIMIT 1',
       ['main']
     );
     if (res.rows.length > 0 && res.rows[0].data) {
-      return res.rows[0].data as FinancialHighlightsData;
+      stored = res.rows[0].data as FinancialHighlightsData;
     }
   } catch (err) {
     console.error('PostgreSQL Error in getFinancialHighlights:', err);
   }
-  return INITIAL_HIGHLIGHTS_DATA;
+
+  // The figures on the slide are lines of the P&L, so they are read off it rather than from the stored
+  // copy, which cannot then fall behind an edit made in the P&L grid.
+  const source = await getScenarioBySlug(PNL_SOURCE_SLUG);
+  return applyPnlSource(stored, source.items);
 }
 
 export async function saveFinancialHighlights(
   data: FinancialHighlightsData
 ): Promise<FinancialHighlightsData> {
   try {
+    // Saving the derived figures too keeps the stored copy in step, so anything reading the row
+    // directly sees the same numbers as the slide.
+    const source = await getScenarioBySlug(PNL_SOURCE_SLUG);
+    const derived = applyPnlSource(data, source.items);
     await pool.query(
       `INSERT INTO mra.financial_highlights (id, data, updated_at)
        VALUES ($1, $2, NOW())
        ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, updated_at = NOW()`,
-      ['main', JSON.stringify(data)]
+      ['main', JSON.stringify(derived)]
     );
-    return data;
+    return derived;
   } catch (err) {
     console.error('PostgreSQL Error in saveFinancialHighlights:', err);
     throw err;

@@ -5,46 +5,33 @@ import { useRouter } from 'next/navigation';
 import {
   Save, RotateCcw, ExternalLink, Sparkles,
   BarChart3, Coins, TrendingUp, Percent, FileText,
-  DollarSign, Activity, Check
+  DollarSign, Activity, Check, Lock
 } from 'lucide-react';
 import SaveNotification from '@/components/admin/SaveNotification';
-import { FinancialHighlightsData } from '@/lib/types';
+import { FinancialHighlightsData, FinancialRowData } from '@/lib/types';
 import { INITIAL_HIGHLIGHTS_DATA } from '@/lib/highlights-data';
 import { useEditHistory } from '@/lib/use-edit-history';
-import { formatForEdit, parseNumberInput } from '@/lib/number-format';
-import { deriveMargins } from '@/lib/highlights-margins';
+import { formatBn, formatPct } from '@/lib/number-format';
+import { PNL_SOURCE_SLUG, PNL_SOURCE_TITLE, applyPnlSource } from '@/lib/highlights-from-pnl';
 import HighlightsMatrix from './HighlightsMatrix';
 import { EditHistoryButtons } from './EditToolbar';
 
-/**
- * A number field that reads what the person typed with the same parser as the grids, so a decimal
- * comma works as well as a decimal point. A plain <input type="number"> rejects one of the two
- * depending on the browser's locale, and hands back an empty value that would be stored as zero.
- */
-function NumberInput({ value, onCommit, className }: { value: number; onCommit: (value: number) => void; className?: string }) {
-  const [text, setText] = useState(() => formatForEdit(value));
-  const isFocused = useRef(false);
-
-  useEffect(() => {
-    if (!isFocused.current) setText(formatForEdit(value));
-  }, [value]);
-
+/** A figure the slide reads off the P&L: shown the way it will appear, never typed into. */
+function DerivedField({ label, text, isLightMode, tone }: { label: string; text: string; isLightMode: boolean; tone?: 'growth' }) {
   return (
-    <input
-      type="text"
-      inputMode="decimal"
-      className={className}
-      value={text}
-      onFocus={() => { isFocused.current = true; }}
-      onChange={(event) => setText(event.target.value)}
-      onBlur={() => {
-        isFocused.current = false;
-        const parsed = parseNumberInput(text);
-        // Text that is not a number puts the old figure back rather than storing a zero
-        if (parsed === null) setText(formatForEdit(value));
-        else { onCommit(parsed); setText(formatForEdit(parsed)); }
-      }}
-    />
+    <div>
+      <label className="text-[10px] text-slate-400 font-semibold flex items-center gap-1">
+        {label}
+        <Lock size={9} className="text-slate-400" aria-label="Comes from the P&L" />
+      </label>
+      <div
+        className={`w-full text-xs rounded-lg border border-dashed px-2.5 py-1.5 font-bold ${
+          isLightMode ? 'bg-slate-100/70 border-slate-300 text-slate-500' : 'bg-slate-900/40 border-slate-700 text-slate-400'
+        } ${tone === 'growth' ? 'font-semibold' : ''}`}
+      >
+        {text}
+      </div>
+    </div>
   );
 }
 
@@ -65,6 +52,8 @@ export default function HighlightsStudio({ isLightMode = true }: HighlightsStudi
   }, [saveSuccess]);
 
   const [loading, setLoading] = useState(true);
+  // The P&L the slide is drawn from, so the figures shown here are the ones the slide will show
+  const [pnlItems, setPnlItems] = useState<Record<string, FinancialRowData>>();
 
   // Undo/redo for the figures typed into the grids. Plain text fields keep the browser's own undo.
   const { push, undo, redo, clear: clearHistory, canUndo, canRedo } = useEditHistory<FinancialHighlightsData>();
@@ -80,18 +69,25 @@ export default function HighlightsStudio({ isLightMode = true }: HighlightsStudi
     if (next) setHighlightsData(next);
   }, [redo]);
 
-  // Fetch saved highlights on mount
+  // Fetch saved highlights and the P&L they are read off, on mount
   useEffect(() => {
     async function load() {
       try {
         setLoading(true);
-        const res = await fetch('/api/highlights');
-        if (res.ok) {
-          const json = await res.json();
+        const [highlights, scenario] = await Promise.all([
+          fetch('/api/highlights'),
+          fetch(`/api/scenarios/${PNL_SOURCE_SLUG}`),
+        ]);
+        if (highlights.ok) {
+          const json = await highlights.json();
           if (json.data) {
             setHighlightsData(json.data);
             clearHistory();
           }
+        }
+        if (scenario.ok) {
+          const json = await scenario.json();
+          if (json.data?.items) setPnlItems(json.data.items);
         }
       } catch (e) {
         console.error('Error fetching highlights:', e);
@@ -110,7 +106,7 @@ export default function HighlightsStudio({ isLightMode = true }: HighlightsStudi
       const res = await fetch('/api/highlights', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...highlightsData, marginsTrajectory: margins }),
+        body: JSON.stringify(sourced),
       });
 
       if (res.ok) {
@@ -127,7 +123,7 @@ export default function HighlightsStudio({ isLightMode = true }: HighlightsStudi
   };
 
   const handleReset = () => {
-    if (confirm('Reset all values to Slide 1 baseline figures?')) {
+    if (confirm('Put the slide wording and the Actual/Forecast marking back to the baseline? The figures stay as they are in the P&L.')) {
       setHighlightsData(INITIAL_HIGHLIGHTS_DATA);
       clearHistory();
     }
@@ -147,16 +143,6 @@ export default function HighlightsStudio({ isLightMode = true }: HighlightsStudi
     }));
   };
 
-  const updateRevenuePoint = (year: string, value: number) => {
-    rememberBeforeEdit();
-    setHighlightsData((prev) => ({
-      ...prev,
-      revenueTrajectory: prev.revenueTrajectory.map((pt) =>
-        pt.year === year ? { ...pt, value } : pt
-      ),
-    }));
-  };
-
   const toggleRevenueForecast = (year: string) => {
     rememberBeforeEdit();
     setHighlightsData((prev) => ({
@@ -167,23 +153,11 @@ export default function HighlightsStudio({ isLightMode = true }: HighlightsStudi
     }));
   };
 
-  const updatePnlPoint = (
-    year: string,
-    field: 'gp' | 'ebitda' | 'ebit' | 'eat',
-    value: number
-  ) => {
-    rememberBeforeEdit();
-    setHighlightsData((prev) => ({
-      ...prev,
-      pnlTrajectory: prev.pnlTrajectory.map((pt) =>
-        pt.year === year ? { ...pt, [field]: value } : pt
-      ),
-    }));
-  };
-
-  // Margins are not typed in: each is a P&L line over that year's revenue. Deriving them here means
-  // the table cannot drift from the two tables it is read off.
-  const margins = deriveMargins(highlightsData.revenueTrajectory, highlightsData.pnlTrajectory);
+  // Revenue, Gross Profit, EBITDA, EBIT and Net Profit are lines of the P&L, and the margins follow
+  // from them, so the slide reads all of them off the P&L instead of keeping a copy that can drift.
+  // What is left to edit here is what the slide says about the figures, not the figures themselves.
+  const sourced = applyPnlSource(highlightsData, pnlItems);
+  const margins = sourced.marginsTrajectory;
 
   const updateCashflowPoint = (
     year: string,
@@ -226,7 +200,7 @@ export default function HighlightsStudio({ isLightMode = true }: HighlightsStudi
                   Financial Highlights Deck Studio
                 </h2>
                 <p className="text-xs text-slate-400">
-                  Edit the numbers behind the Highlights slide.
+                  The figures come from {PNL_SOURCE_TITLE}. Here you set what the slide says about them.
                 </p>
               </div>
             </div>
@@ -247,7 +221,7 @@ export default function HighlightsStudio({ isLightMode = true }: HighlightsStudi
                   ? 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
                   : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
               }`}
-              title="Reset values to PPT Slide 1 Baseline"
+              title="Put the slide wording and Actual/Forecast marking back to the baseline"
             >
               <RotateCcw size={13} />
               Reset Baseline
@@ -284,7 +258,9 @@ export default function HighlightsStudio({ isLightMode = true }: HighlightsStudi
               Executive KPI Cards (Top Bar)
             </h3>
             <p className="text-xs text-slate-400 mt-0.5">
-              Target figures displayed on the 4 top summary cards of the presentation slide.
+              The four cards across the top of the slide. The figures are the last year of the charts
+              below against the year before it, so they come from {PNL_SOURCE_TITLE}; the wording next
+              to them is yours.
             </p>
           </div>
         </div>
@@ -297,23 +273,9 @@ export default function HighlightsStudio({ isLightMode = true }: HighlightsStudi
               <BarChart3 size={16} className="text-emerald-500" />
             </div>
             <div className="space-y-2">
-              <div>
-                <label className="text-[10px] text-slate-400 font-semibold">Value (IDR Bn)</label>
-                <NumberInput
-                  value={highlightsData.kpis.revenue.value}
-                  onCommit={(next) => updateKpi('revenue', 'value', next)}
-                  className={`w-full text-xs rounded-lg border px-2.5 py-1.5 font-bold outline-none ${inputBg}`}
-                />
-              </div>
+              <DerivedField label="Value (IDR Bn)" text={formatBn(sourced.kpis.revenue.value)} isLightMode={isLightMode} />
               <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-[10px] text-slate-400 font-semibold">YoY %</label>
-                  <NumberInput
-                    value={highlightsData.kpis.revenue.yoyPct}
-                    onCommit={(next) => updateKpi('revenue', 'yoyPct', next)}
-                    className={`w-full text-xs rounded-lg border px-2.5 py-1.5 font-semibold text-emerald-500 outline-none ${inputBg}`}
-                  />
-                </div>
+                <DerivedField label="YoY %" text={formatPct(sourced.kpis.revenue.yoyPct)} isLightMode={isLightMode} tone="growth" />
                 <div>
                   <label className="text-[10px] text-slate-400 font-semibold">Comparison</label>
                   <input
@@ -334,23 +296,9 @@ export default function HighlightsStudio({ isLightMode = true }: HighlightsStudi
               <Coins size={16} className="text-emerald-500" />
             </div>
             <div className="space-y-2">
-              <div>
-                <label className="text-[10px] text-slate-400 font-semibold">Value (IDR Bn)</label>
-                <NumberInput
-                  value={highlightsData.kpis.ebitda.value}
-                  onCommit={(next) => updateKpi('ebitda', 'value', next)}
-                  className={`w-full text-xs rounded-lg border px-2.5 py-1.5 font-bold outline-none ${inputBg}`}
-                />
-              </div>
+              <DerivedField label="Value (IDR Bn)" text={formatBn(sourced.kpis.ebitda.value)} isLightMode={isLightMode} />
               <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-[10px] text-slate-400 font-semibold">YoY %</label>
-                  <NumberInput
-                    value={highlightsData.kpis.ebitda.yoyPct}
-                    onCommit={(next) => updateKpi('ebitda', 'yoyPct', next)}
-                    className={`w-full text-xs rounded-lg border px-2.5 py-1.5 font-semibold text-emerald-500 outline-none ${inputBg}`}
-                  />
-                </div>
+                <DerivedField label="YoY %" text={formatPct(sourced.kpis.ebitda.yoyPct)} isLightMode={isLightMode} tone="growth" />
                 <div>
                   <label className="text-[10px] text-slate-400 font-semibold">Comparison</label>
                   <input
@@ -371,23 +319,9 @@ export default function HighlightsStudio({ isLightMode = true }: HighlightsStudi
               <TrendingUp size={16} className="text-emerald-500" />
             </div>
             <div className="space-y-2">
-              <div>
-                <label className="text-[10px] text-slate-400 font-semibold">Value (IDR Bn)</label>
-                <NumberInput
-                  value={highlightsData.kpis.eat.value}
-                  onCommit={(next) => updateKpi('eat', 'value', next)}
-                  className={`w-full text-xs rounded-lg border px-2.5 py-1.5 font-bold outline-none ${inputBg}`}
-                />
-              </div>
+              <DerivedField label="Value (IDR Bn)" text={formatBn(sourced.kpis.eat.value)} isLightMode={isLightMode} />
               <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-[10px] text-slate-400 font-semibold">YoY %</label>
-                  <NumberInput
-                    value={highlightsData.kpis.eat.yoyPct}
-                    onCommit={(next) => updateKpi('eat', 'yoyPct', next)}
-                    className={`w-full text-xs rounded-lg border px-2.5 py-1.5 font-semibold text-emerald-500 outline-none ${inputBg}`}
-                  />
-                </div>
+                <DerivedField label="YoY %" text={formatPct(sourced.kpis.eat.yoyPct)} isLightMode={isLightMode} tone="growth" />
                 <div>
                   <label className="text-[10px] text-slate-400 font-semibold">Comparison</label>
                   <input
@@ -408,23 +342,9 @@ export default function HighlightsStudio({ isLightMode = true }: HighlightsStudi
               <Percent size={16} className="text-emerald-500" />
             </div>
             <div className="space-y-2">
-              <div>
-                <label className="text-[10px] text-slate-400 font-semibold">Value (%)</label>
-                <NumberInput
-                  value={highlightsData.kpis.gpm.value}
-                  onCommit={(next) => updateKpi('gpm', 'value', next)}
-                  className={`w-full text-xs rounded-lg border px-2.5 py-1.5 font-bold outline-none ${inputBg}`}
-                />
-              </div>
+              <DerivedField label="Value (%)" text={formatPct(sourced.kpis.gpm.value)} isLightMode={isLightMode} />
               <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-[10px] text-slate-400 font-semibold">YoY Diff (%)</label>
-                  <NumberInput
-                    value={highlightsData.kpis.gpm.yoyDiff}
-                    onCommit={(next) => updateKpi('gpm', 'yoyDiff', next)}
-                    className={`w-full text-xs rounded-lg border px-2.5 py-1.5 font-semibold outline-none ${inputBg}`}
-                  />
-                </div>
+                <DerivedField label="YoY Diff (%)" text={formatPct(sourced.kpis.gpm.yoyDiff)} isLightMode={isLightMode} tone="growth" />
                 <div>
                   <label className="text-[10px] text-slate-400 font-semibold">Comparison</label>
                   <input
@@ -448,15 +368,18 @@ export default function HighlightsStudio({ isLightMode = true }: HighlightsStudi
               <BarChart3 className="w-4 h-4 text-emerald-500" />
               Revenue Trajectory
             </h3>
-            <p className="text-xs text-slate-400 mt-0.5">Years marked Actual are drawn solid on the slide; Forecast years are drawn hatched.</p>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Total Revenue (Net) read from {PNL_SOURCE_TITLE}. Edit a year there and it moves here.
+              What you set here is which years are drawn solid (Actual) and which hatched (Forecast).
+            </p>
           </div>
         </div>
         <HighlightsMatrix
           rows={[{ field: 'value', label: 'Revenue' }]}
-          points={highlightsData.revenueTrajectory}
+          points={sourced.revenueTrajectory}
           caption="IDR Billion"
           isLightMode={isLightMode}
-          onEdit={(field, year, value) => updateRevenuePoint(year, value)}
+          readOnly
           onToggleForecast={toggleRevenueForecast}
           onUndo={onUndo}
           onRedo={onRedo}
@@ -471,7 +394,10 @@ export default function HighlightsStudio({ isLightMode = true }: HighlightsStudi
               <BarChart3 className="w-4 h-4 text-emerald-500" />
               Gross Profit, EBITDA and Net Profit
             </h3>
-            <p className="text-xs text-slate-400 mt-0.5">The four bars shown for each year on the slide.</p>
+            <p className="text-xs text-slate-400 mt-0.5">
+              The four bars shown for each year on the slide, read from {PNL_SOURCE_TITLE}: Gross Profit,
+              EBITDA after holding cost, Operating Profit (EBIT) and Net Profit After Tax. Edit them there.
+            </p>
           </div>
         </div>
         <HighlightsMatrix
@@ -481,10 +407,10 @@ export default function HighlightsStudio({ isLightMode = true }: HighlightsStudi
             { field: 'ebit', label: 'EBIT' },
             { field: 'eat', label: 'Net Profit (EAT)' },
           ]}
-          points={highlightsData.pnlTrajectory}
+          points={sourced.pnlTrajectory}
           caption="IDR Billion"
           isLightMode={isLightMode}
-          onEdit={(field, year, value) => updatePnlPoint(year, field as 'gp' | 'ebitda' | 'ebit' | 'eat', value)}
+          readOnly
           onUndo={onUndo}
           onRedo={onRedo}
         />
