@@ -19,6 +19,7 @@ import { deriveMargins } from '@/lib/highlights-margins';
 import { useDeckExport } from '@/components/DeckExportContext';
 import HighlightsTooltip from '@/components/HighlightsTooltip';
 import { formatHighlightBarLabel, formatHighlightValue } from '@/lib/highlights-format';
+import { barAxis } from '@/lib/highlights-axis';
 
 // One colour per P&L line, used by every chart on this slide so a series keeps its identity.
 // Checked with the data-viz palette validator on the light surface: lightness band, chroma floor,
@@ -118,6 +119,10 @@ export default function FinancialHighlightsPage() {
     ebit: pt.ebit * scaleMultiplier,
     eat: pt.eat * scaleMultiplier,
   }));
+
+  // The axis follows the figures, so the bars use the height of the chart instead of being pushed up
+  // into a corner by a floor left over from one small loss
+  const pnlAxis = barAxis(formattedPnl.flatMap((pt) => [pt.gp, pt.ebitda, pt.ebit, pt.eat]));
 
   // Style tokens matching the attached slide
   const pageBg = isLightMode ? 'bg-[#F4F6F8] text-slate-800' : 'bg-[#070B14] text-slate-100';
@@ -448,7 +453,7 @@ export default function FinancialHighlightsPage() {
               <BarChart data={formattedPnl} margin={{ top: 20, right: 10, left: -10, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} vertical={false} />
                 <XAxis dataKey="year" stroke={axisColor} fontSize={11} tickLine={false} />
-                <YAxis stroke={axisColor} fontSize={11} tickLine={false} />
+                <YAxis stroke={axisColor} fontSize={11} tickLine={false} domain={pnlAxis.domain} ticks={pnlAxis.ticks} allowDecimals={false} />
                 <ReferenceLine y={0} stroke={axisColor} />
                 <Tooltip isAnimationActive={false} offset={16} cursor={{ stroke: isLightMode ? "#94b8ae" : "#4f766e", strokeWidth: 1, fill: isLightMode ? "rgba(13,148,136,0.045)" : "rgba(45,212,191,0.06)" }} wrapperStyle={{ outline: "none", zIndex: 50 }} content={<HighlightsTooltip variant="pnl" unit={unitLabel} light={isLightMode} trajectory={data.revenueTrajectory} />} />
                 <Bar isAnimationActive={!exportSlide} dataKey="gp" name="GP" fill={series.gp} radius={[3, 3, 0, 0]}>
