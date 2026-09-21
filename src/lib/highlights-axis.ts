@@ -1,5 +1,5 @@
 /**
- * The value axis of the bar charts on the Financial Highlights slide.
+ * The value axis of the charts on the Financial Highlights slide.
  *
  * Left to itself, the axis keeps its tick step round by stretching downwards: one year with a loss of
  * 13 pulled the floor to -500 against a tallest bar of 1,416, so a third of the chart was empty and
@@ -22,7 +22,7 @@ const stepAbove = (rough: number) => scaled(rough, (steps) => steps.find((step) 
 /** The largest round step at or below `rough` */
 const stepBelow = (rough: number) => scaled(rough, (steps) => [...steps].reverse().find((step) => step <= rough) ?? steps[0]);
 
-export interface BarAxis {
+export interface ValueAxis {
   domain: [number, number];
   ticks: number[];
 }
@@ -34,7 +34,7 @@ export interface BarAxis {
  * it. The floor is zero when nothing is negative; otherwise it is a shallow band, deep enough for the
  * losing bar and its figure without giving the whole chart away to empty space.
  */
-export function barAxis(values: number[], targetTicks = 3): BarAxis {
+export function valueAxis(values: number[], targetTicks = 3): ValueAxis {
   const figures = values.filter((value) => Number.isFinite(value));
   const max = Math.max(0, ...figures);
   const min = Math.min(0, ...figures);
@@ -48,8 +48,11 @@ export function barAxis(values: number[], targetTicks = 3): BarAxis {
   const ticks: number[] = [];
   for (let tick = 0; tick <= top + step / 2; tick += step) ticks.push(Math.round(tick * 1000) / 1000);
 
-  // Deep enough for the losing bar and its figure, and never more than a small band of the chart
-  const floor = min < 0 ? -stepBelow(Math.max(Math.abs(min) * 1.8, top * 0.07)) : 0;
+  // Deep enough for the losing figure to sit clear of the axis line, and never more than a small band
+  const band = Math.max(Math.abs(min) * 1.8, top * 0.07);
+  const clears = (candidate: number) => -candidate <= min - top * 0.01;
+  const shallow = stepBelow(band);
+  const floor = min < 0 ? -(clears(shallow) ? shallow : stepAbove(band)) : 0;
 
   return { domain: [floor, top], ticks };
 }

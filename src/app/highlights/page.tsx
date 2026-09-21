@@ -5,7 +5,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import {
-  ResponsiveContainer, BarChart, Bar, Cell, LineChart, Line,
+  ResponsiveContainer, BarChart, Bar, Cell, ComposedChart, Area, Line,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceLine, LabelList
 } from 'recharts';
 import {
@@ -19,7 +19,7 @@ import { deriveMargins } from '@/lib/highlights-margins';
 import { useDeckExport } from '@/components/DeckExportContext';
 import HighlightsTooltip from '@/components/HighlightsTooltip';
 import { formatHighlightBarLabel, formatHighlightValue } from '@/lib/highlights-format';
-import { barAxis } from '@/lib/highlights-axis';
+import { valueAxis } from '@/lib/highlights-axis';
 import { formatPct } from '@/lib/number-format';
 
 // One colour per P&L line, used by every chart on this slide so a series keeps its identity.
@@ -31,6 +31,31 @@ import { formatPct } from '@/lib/number-format';
 type SeriesColours = { gp: string; ebitda: string; ebit: string; eat: string };
 const SERIES_LIGHT: SeriesColours = { gp: '#1baf7a', ebitda: '#2a78d6', ebit: '#eb6834', eat: '#4a3aa7' };
 const SERIES_DARK: SeriesColours = { gp: '#199e70', ebitda: '#3987e5', ebit: '#d95926', eat: '#9085e9' };
+
+/**
+ * The figures printed on a margin line: its name and where it lands at the far right, and, while the
+ * line is the one being singled out, its figure over every year. The name sits inside the line's own
+ * group, so clicking it picks that line like clicking the line itself.
+ */
+function marginLabel(label: string, colour: string, focused: boolean, lastIndex: number) {
+  return function MarginLabel(props: any) {
+    const { x, y, value, index } = props;
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+    if (index === lastIndex) {
+      return (
+        <text x={x + 10} y={y} dy={4} fill={colour} fontSize={11} fontWeight={700}>
+          {label} {formatPct(Number(value))}
+        </text>
+      );
+    }
+    if (!focused) return null;
+    return (
+      <text x={x} y={y - 10} textAnchor="middle" fill={colour} fontSize={10} fontWeight={700}>
+        {formatPct(Number(value))}
+      </text>
+    );
+  };
+}
 
 /** The four lines of the Margins Trajectory, in the order they are drawn and listed */
 const MARGIN_SERIES = [
@@ -149,7 +174,9 @@ export default function FinancialHighlightsPage() {
 
   // The axis follows the figures, so the bars use the height of the chart instead of being pushed up
   // into a corner by a floor left over from one small loss
-  const pnlAxis = barAxis(formattedPnl.flatMap((pt) => [pt.gp, pt.ebitda, pt.ebit, pt.eat]));
+  const pnlAxis = valueAxis(formattedPnl.flatMap((pt) => [pt.gp, pt.ebitda, pt.ebit, pt.eat]));
+  const marginsAxis = valueAxis(marginsData.flatMap((pt) => [pt.gpm, pt.ebitdam, pt.ebitm, pt.eatm]));
+  const lastMarginIndex = marginsData.length - 1;
 
   // A slide being printed shows every margin: a highlight is something you do while presenting
   const focusedMargin = exportSlide ? null : marginFocus;
@@ -551,34 +578,9 @@ export default function FinancialHighlightsPage() {
                   </motion.button>
                 )}
               </AnimatePresence>
-
-              {MARGIN_SERIES.map((line) => {
-                const colour = series[line.colour];
-                const on = focusedMargin === line.key;
-                return (
-                  <button
-                    key={line.key}
-                    type="button"
-                    onClick={() => toggleMarginFocus(line.key)}
-                    aria-pressed={on}
-                    title={on ? 'Show every margin again' : `Single out ${line.label}`}
-                    className={`relative flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-semibold transition-colors ${
-                      on ? (isLightMode ? 'text-slate-900' : 'text-white') : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
-                    }`}
-                  >
-                    {on && (
-                      <motion.span
-                        layoutId="margins-focus-marker"
-                        className="absolute inset-0 rounded-full"
-                        style={{ background: `${colour}1f`, boxShadow: `inset 0 0 0 1px ${colour}` }}
-                        transition={reduceMotion ? { duration: 0 } : { type: 'spring', stiffness: 420, damping: 34 }}
-                      />
-                    )}
-                    <span className="relative w-2 h-2 rounded-full" style={{ background: colour }} />
-                    <span className="relative">{line.label}</span>
-                  </button>
-                );
-              })}
+              {!focusedMargin && (
+                <span className="text-[10px] text-slate-400">Click a line to single it out</span>
+              )}
             </div>
           </div>
 
@@ -588,12 +590,40 @@ export default function FinancialHighlightsPage() {
 
           <div className="flex-1 min-h-[220px] margins-chart" data-focus={focusedMargin ?? undefined} onClick={onMarginsClick}>
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={marginsData} margin={{ top: 20, right: 15, left: -10, bottom: 0 }}>
+              <ComposedChart data={marginsData} margin={{ top: 20, right: 116, left: -10, bottom: 0 }}>
+                <defs>
+                  {MARGIN_SERIES.map((line) => (
+                    <linearGradient key={`grad-${line.key}`} id={`margin-fill-${line.key}`} x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={series[line.colour]} stopOpacity={0.22} />
+                      <stop offset="22%" stopColor={series[line.colour]} stopOpacity={0.05} />
+                      <stop offset="45%" stopColor={series[line.colour]} stopOpacity={0} />
+                    </linearGradient>
+                  ))}
+                </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} vertical={false} />
                 <XAxis dataKey="year" stroke={axisColor} fontSize={11} tickLine={false} />
-                <YAxis stroke={axisColor} fontSize={11} tickLine={false} unit="%" domain={[-10, 60]} />
+                <YAxis stroke={axisColor} fontSize={11} tickLine={false} unit="%" domain={marginsAxis.domain} ticks={marginsAxis.ticks} />
                 <ReferenceLine y={0} stroke={axisColor} />
                 <Tooltip isAnimationActive={false} offset={16} cursor={{ stroke: isLightMode ? "#94b8ae" : "#4f766e", strokeWidth: 1, fill: isLightMode ? "rgba(13,148,136,0.045)" : "rgba(45,212,191,0.06)" }} wrapperStyle={{ outline: "none", zIndex: 50 }} content={<HighlightsTooltip variant="margins" unit={unitLabel} light={isLightMode} trajectory={data.revenueTrajectory} />} />
+
+                {/* The wash under each line goes in first so every line is drawn over it */}
+                {MARGIN_SERIES.map((line, index) => (
+                  <Area
+                    key={`area-${line.key}`}
+                    className={`margin-series-${index}${focusedMargin === line.key ? ' is-focused' : ''}`}
+                    isAnimationActive={animateCharts}
+                    animationDuration={900}
+                    animationBegin={index * 140}
+                    type="monotone"
+                    dataKey={line.key}
+                    stroke="none"
+                    fill={`url(#margin-fill-${line.key})`}
+                    activeDot={false}
+                    tooltipType="none"
+                    legendType="none"
+                  />
+                ))}
+
                 {/* The lines draw themselves in on the way up, each asked to start a little after the one
                     before it. Singling one out is left to CSS: the stroke, the dots and the fading of the
                     other three are all transitions, so Recharts keeps the paths it already drew rather
@@ -602,7 +632,7 @@ export default function FinancialHighlightsPage() {
                   const on = focusedMargin === line.key;
                   return (
                     <Line
-                      key={line.key}
+                      key={`line-${line.key}`}
                       className={`margin-series-${index}${on ? ' is-focused' : ''}`}
                       isAnimationActive={animateCharts}
                       animationDuration={900}
@@ -616,19 +646,11 @@ export default function FinancialHighlightsPage() {
                       activeDot={{ r: 6, strokeWidth: 2 }}
                       cursor="pointer"
                     >
-                      <LabelList
-                        dataKey={line.key}
-                        position="top"
-                        offset={10}
-                        fill={series[line.colour]}
-                        fontSize={10}
-                        fontWeight={700}
-                        formatter={(value: any) => (on ? formatPct(Number(value)) : '')}
-                      />
+                      <LabelList dataKey={line.key} content={marginLabel(line.label, series[line.colour], on, lastMarginIndex)} />
                     </Line>
                   );
                 })}
-              </LineChart>
+              </ComposedChart>
             </ResponsiveContainer>
           </div>
         </motion.div>

@@ -15,7 +15,17 @@ export default function HighlightsTooltip({ active, payload, label, variant, uni
   trajectory: FinancialHighlightsData['revenueTrajectory'];
 }) {
   if (!active || !payload?.length) return null;
-  const rows = payload.filter(row => row.value !== null && row.value !== undefined && Number.isFinite(Number(row.value)));
+  const reported = payload.filter(row => row.value !== null && row.value !== undefined && Number.isFinite(Number(row.value)));
+  // A line drawn over its own wash reports the same figure twice. That is one thing on the chart, so it
+  // is one row here: the entry carrying the line's colour wins over the one carrying the gradient's.
+  const byLine = new Map<string, Entry>();
+  for (const row of reported) {
+    const key = String(row.dataKey ?? row.name);
+    const held = byLine.get(key);
+    const isWash = (value?: string) => !value || value.startsWith('url(');
+    if (!held || (isWash(held.color) && !isWash(row.color))) byLine.set(key, row);
+  }
+  const rows = Array.from(byLine.values());
   if (!rows.length) return null;
   const year = String(label ?? '');
   const period = trajectory.find(point => point.year === year);

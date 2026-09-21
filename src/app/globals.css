@@ -902,7 +902,14 @@ body {
 .margins-chart {
   cursor: pointer;
 }
+/* The dot Recharts puts under the pointer sits in a layer of its own, outside the line it belongs to.
+   Left clickable it swallows the click and the chart reads it as a click on nothing, so a line you are
+   hovering could never be picked. Letting the click through lands it on the line's own dot. */
+.margins-chart .recharts-active-dot {
+  pointer-events: none;
+}
 .margins-chart .recharts-line,
+.margins-chart .recharts-area,
 .margins-chart .recharts-label-list {
   transition: opacity 0.35s ease;
 }
@@ -913,6 +920,9 @@ body {
 .margins-chart[data-focus] .recharts-line:not(.is-focused) {
   opacity: 0.16;
 }
+.margins-chart[data-focus] .recharts-area:not(.is-focused) {
+  opacity: 0;
+}
 .margins-chart .recharts-line.is-focused .recharts-curve {
   stroke-width: 4;
 }
@@ -922,6 +932,7 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .margins-chart .recharts-line,
+  .margins-chart .recharts-area,
   .margins-chart .recharts-label-list,
   .margins-chart .recharts-line .recharts-curve,
   .margins-chart .recharts-line .recharts-dot {
