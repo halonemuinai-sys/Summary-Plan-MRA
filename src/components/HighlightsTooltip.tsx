@@ -1,4 +1,5 @@
 import { FinancialHighlightsData } from '@/lib/types';
+import { formatHighlightValue } from '@/lib/highlights-format';
 
 type Variant = 'revenue' | 'pnl' | 'margins' | 'cashflow';
 interface Entry { dataKey?: string | number; name?: string; value?: number | string; color?: string }
@@ -20,7 +21,7 @@ export default function HighlightsTooltip({ active, payload, label, variant, uni
   const period = trajectory.find(point => point.year === year);
   const percent = variant === 'margins';
   const format = (value: number) => {
-    const figure = Math.abs(value).toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+    const figure = formatHighlightValue(Math.abs(value));
     return `${value < 0 ? '(' : ''}${figure}${percent ? '%' : ''}${value < 0 ? ')' : ''}`;
   };
   const netCash = rows.reduce((sum, row) => sum + Number(row.value), 0);

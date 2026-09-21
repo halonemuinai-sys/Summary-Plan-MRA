@@ -10,12 +10,13 @@ import {
 } from 'recharts';
 import {
   BarChart3, Coins, PieChart as PieIcon, TrendingUp,
-  Landmark, ArrowLeft, Sun, Moon, Maximize2, Minimize2,
+  ArrowLeft, Sun, Moon, Maximize2, Minimize2,
   Settings, Check, Copy, Sparkles, Filter
 } from 'lucide-react';
 import { FinancialHighlightsData } from '@/lib/types';
 import { INITIAL_HIGHLIGHTS_DATA } from '@/lib/highlights-data';
 import HighlightsTooltip from '@/components/HighlightsTooltip';
+import { formatHighlightValue } from '@/lib/highlights-format';
 
 // One colour per P&L line, used by every chart on this slide so a series keeps its identity.
 // Checked with the data-viz palette validator on the light surface: lightness band, chroma floor,
@@ -26,9 +27,6 @@ import HighlightsTooltip from '@/components/HighlightsTooltip';
 type SeriesColours = { gp: string; ebitda: string; ebit: string; eat: string };
 const SERIES_LIGHT: SeriesColours = { gp: '#1baf7a', ebitda: '#2a78d6', ebit: '#eb6834', eat: '#4a3aa7' };
 const SERIES_DARK: SeriesColours = { gp: '#199e70', ebitda: '#3987e5', ebit: '#d95926', eat: '#9085e9' };
-
-// Cash flow reuses the first three, in the same order
-const cashflowOf = (s: SeriesColours) => ({ cfo: s.gp, cfi: s.ebitda, cff: s.ebit });
 
 export default function FinancialHighlightsPage() {
   const [data, setData] = useState<FinancialHighlightsData>(INITIAL_HIGHLIGHTS_DATA);
@@ -97,24 +95,17 @@ export default function FinancialHighlightsPage() {
     })
     .map((pt) => ({
       ...pt,
-      displayValue: Math.round(pt.value * scaleMultiplier),
-      actualValue: !pt.isForecast ? Math.round(pt.value * scaleMultiplier) : null,
-      forecastValue: pt.isForecast ? Math.round(pt.value * scaleMultiplier) : null,
+      displayValue: pt.value * scaleMultiplier,
+      actualValue: !pt.isForecast ? pt.value * scaleMultiplier : null,
+      forecastValue: pt.isForecast ? pt.value * scaleMultiplier : null,
     }));
 
   const formattedPnl = data.pnlTrajectory.map((pt) => ({
     year: pt.year,
-    gp: Math.round(pt.gp * scaleMultiplier),
-    ebitda: Math.round(pt.ebitda * scaleMultiplier),
-    ebit: Math.round(pt.ebit * scaleMultiplier),
-    eat: Math.round(pt.eat * scaleMultiplier),
-  }));
-
-  const formattedCashflow = data.cashflowTrajectory.map((pt) => ({
-    year: pt.year,
-    cfo: Math.round(pt.cfo * scaleMultiplier),
-    cfi: Math.round(pt.cfi * scaleMultiplier),
-    cff: Math.round(pt.cff * scaleMultiplier),
+    gp: pt.gp * scaleMultiplier,
+    ebitda: pt.ebitda * scaleMultiplier,
+    ebit: pt.ebit * scaleMultiplier,
+    eat: pt.eat * scaleMultiplier,
   }));
 
   // Style tokens matching the attached slide
@@ -126,7 +117,6 @@ export default function FinancialHighlightsPage() {
   const gridStroke = isLightMode ? '#E2E8F0' : '#1E293B';
   const axisColor = isLightMode ? '#64748B' : '#94A3B8';
   const series = isLightMode ? SERIES_LIGHT : SERIES_DARK;
-  const cashflow = cashflowOf(series);
 
   return (
     <div className={`highlights-presentation min-h-screen ${pageBg} flex flex-col justify-between p-4 lg:p-6 select-none font-sans transition-colors duration-300`}>
@@ -250,7 +240,7 @@ export default function FinancialHighlightsPage() {
               </p>
               <div className="flex items-baseline gap-1 mt-0.5">
                 <span className="text-2xl font-black tracking-tight">
-                  {(data.kpis.revenue.value * scaleMultiplier).toLocaleString('en-US')}
+                  {formatHighlightValue(data.kpis.revenue.value * scaleMultiplier)}
                 </span>
                 <span className="text-[10px] font-bold text-slate-400">
                   {unitLabel}
@@ -280,7 +270,7 @@ export default function FinancialHighlightsPage() {
               </p>
               <div className="flex items-baseline gap-1 mt-0.5">
                 <span className="text-2xl font-black tracking-tight">
-                  {(data.kpis.ebitda.value * scaleMultiplier).toLocaleString('en-US')}
+                  {formatHighlightValue(data.kpis.ebitda.value * scaleMultiplier)}
                 </span>
                 <span className="text-[10px] font-bold text-slate-400">
                   {unitLabel}
@@ -310,7 +300,7 @@ export default function FinancialHighlightsPage() {
               </p>
               <div className="flex items-baseline gap-1 mt-0.5">
                 <span className="text-2xl font-black tracking-tight">
-                  {(data.kpis.eat.value * scaleMultiplier).toLocaleString('en-US')}
+                  {formatHighlightValue(data.kpis.eat.value * scaleMultiplier)}
                 </span>
                 <span className="text-[10px] font-bold text-slate-400">
                   {unitLabel}
@@ -356,7 +346,7 @@ export default function FinancialHighlightsPage() {
         </div>
       </section>
 
-      {/* 4-QUADRANT PRESENTATION CANVAS */}
+      {/* REVENUE AND PROFIT ABOVE FULL-WIDTH MARGINS */}
       <main className="grid grid-cols-1 lg:grid-cols-2 gap-4 flex-1">
         {/* QUADRANT 1: REVENUE TRAJECTORY */}
         <motion.div layout className={`rounded-2xl border p-4 flex flex-col justify-between ${cardBg}`}>
@@ -411,7 +401,7 @@ export default function FinancialHighlightsPage() {
                       strokeWidth={point.isForecast ? 1 : 0}
                     />
                   ))}
-                  <LabelList dataKey="displayValue" position="top" fill={isLightMode ? '#334155' : '#CBD5E1'} fontSize={10} formatter={(v: any) => v ? Number(v).toLocaleString() : ''} />
+                  <LabelList dataKey="displayValue" position="top" fill={isLightMode ? '#334155' : '#CBD5E1'} fontSize={10} formatter={formatHighlightValue} />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -451,24 +441,24 @@ export default function FinancialHighlightsPage() {
                 <ReferenceLine y={0} stroke={axisColor} />
                 <Tooltip isAnimationActive={false} offset={16} cursor={{ stroke: isLightMode ? "#94b8ae" : "#4f766e", strokeWidth: 1, fill: isLightMode ? "rgba(13,148,136,0.045)" : "rgba(45,212,191,0.06)" }} wrapperStyle={{ outline: "none", zIndex: 50 }} content={<HighlightsTooltip variant="pnl" unit={unitLabel} light={isLightMode} trajectory={data.revenueTrajectory} />} />
                 <Bar dataKey="gp" name="GP" fill={series.gp} radius={[3, 3, 0, 0]}>
-                  <LabelList dataKey="gp" position="top" fill={axisColor} fontSize={10} />
+                  <LabelList dataKey="gp" position="top" fill={axisColor} fontSize={10} formatter={formatHighlightValue} />
                 </Bar>
                 <Bar dataKey="ebitda" name="EBITDA" fill={series.ebitda} radius={[3, 3, 0, 0]}>
-                  <LabelList dataKey="ebitda" position="top" fill={axisColor} fontSize={10} />
+                  <LabelList dataKey="ebitda" position="top" fill={axisColor} fontSize={10} formatter={formatHighlightValue} />
                 </Bar>
                 <Bar dataKey="ebit" name="EBIT" fill={series.ebit} radius={[3, 3, 0, 0]}>
-                  <LabelList dataKey="ebit" position="top" fill={axisColor} fontSize={10} />
+                  <LabelList dataKey="ebit" position="top" fill={axisColor} fontSize={10} formatter={formatHighlightValue} />
                 </Bar>
                 <Bar dataKey="eat" name="EAT" fill={series.eat} radius={[3, 3, 0, 0]}>
-                  <LabelList dataKey="eat" position="top" fill={axisColor} fontSize={10} />
+                  <LabelList dataKey="eat" position="top" fill={axisColor} fontSize={10} formatter={formatHighlightValue} />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
         </motion.div>
 
-        {/* QUADRANT 3: MARGINS TRAJECTORY */}
-        <motion.div layout className={`rounded-2xl border p-4 flex flex-col justify-between ${cardBg}`}>
+        {/* FULL-WIDTH MARGINS TRAJECTORY */}
+        <motion.div layout className={`col-span-full rounded-2xl border p-4 flex flex-col justify-between ${cardBg}`}>
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
               <span className="p-1 rounded-lg bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
@@ -512,50 +502,6 @@ export default function FinancialHighlightsPage() {
           </div>
         </motion.div>
 
-        {/* QUADRANT 4: CASHFLOW TRAJECTORY */}
-        <motion.div layout className={`rounded-2xl border p-4 flex flex-col justify-between ${cardBg}`}>
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2">
-              <span className="p-1 rounded-lg bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
-                <Landmark size={15} />
-              </span>
-              <h3 className="text-sm font-bold tracking-tight">
-                Cashflow Trajectory
-              </h3>
-            </div>
-
-            <div className="flex items-center gap-3 text-xs">
-              <span className="flex items-center gap-1 text-[10px] text-slate-500"><span className="w-2 h-2 rounded-full" style={{ background: cashflow.cfo }} /> CFO</span>
-              <span className="flex items-center gap-1 text-[10px] text-slate-500"><span className="w-2 h-2 rounded-full" style={{ background: cashflow.cfi }} /> CFI</span>
-              <span className="flex items-center gap-1 text-[10px] text-slate-500"><span className="w-2 h-2 rounded-full" style={{ background: cashflow.cff }} /> CFF</span>
-            </div>
-          </div>
-
-          <p className="text-[10px] text-slate-400 font-medium -mt-1 mb-1">
-            ({unitLabel})
-          </p>
-
-          <div className="flex-1 min-h-[220px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={formattedCashflow} margin={{ top: 20, right: 10, left: -10, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} vertical={false} />
-                <XAxis dataKey="year" stroke={axisColor} fontSize={11} tickLine={false} />
-                <YAxis stroke={axisColor} fontSize={11} tickLine={false} domain={[-300 * scaleMultiplier, 300 * scaleMultiplier]} />
-                <ReferenceLine y={0} stroke={axisColor} />
-                <Tooltip isAnimationActive={false} offset={16} cursor={{ stroke: isLightMode ? "#94b8ae" : "#4f766e", strokeWidth: 1, fill: isLightMode ? "rgba(13,148,136,0.045)" : "rgba(45,212,191,0.06)" }} wrapperStyle={{ outline: "none", zIndex: 50 }} content={<HighlightsTooltip variant="cashflow" unit={unitLabel} light={isLightMode} trajectory={data.revenueTrajectory} />} />
-                <Bar dataKey="cfo" name="CFO" fill={cashflow.cfo} radius={[3, 3, 0, 0]}>
-                  <LabelList dataKey="cfo" position="top" fill={axisColor} fontSize={9} />
-                </Bar>
-                <Bar dataKey="cfi" name="CFI" fill={cashflow.cfi} radius={[0, 0, 3, 3]}>
-                  <LabelList dataKey="cfi" position="bottom" fill={axisColor} fontSize={9} />
-                </Bar>
-                <Bar dataKey="cff" name="CFF" fill={cashflow.cff} radius={[3, 3, 0, 0]}>
-                  <LabelList dataKey="cff" position="top" fill={axisColor} fontSize={9} />
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </motion.div>
       </main>
 
       {/* FOOTER BAR MATCHING ATTACHED SLIDE */}
