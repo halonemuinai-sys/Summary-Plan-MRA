@@ -939,3 +939,51 @@ body {
     transition: none;
   }
 }
+
+/* ------------------------------------------------------------------ */
+/* Figures typed over the ones the P&L gives                           */
+/* ------------------------------------------------------------------ */
+/* The four profit lines follow the P&L until someone types over a year. A typed figure is marked so the
+   table says plainly which of its numbers have left the P&L behind, and the line offers to put it back. */
+.pnl-grid .dsg-cell.pnl-cell-override {
+  background: #fff8e8;
+  box-shadow: inset 2px 0 0 #e0a11b;
+}
+.pnl-grid[data-theme='dark'] .dsg-cell.pnl-cell-override {
+  background: #2e2411;
+  box-shadow: inset 2px 0 0 #d79a1f;
+}
+.pnl-grid .dsg-cell.pnl-cell-override .dsg-input {
+  color: #8a5a06;
+  font-weight: 700;
+}
+.pnl-grid[data-theme='dark'] .dsg-cell.pnl-cell-override .dsg-input {
+  color: #f2cd7c;
+}
+
+.pnl-revert {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border: 1px solid #e3b855;
+  border-radius: 999px;
+  background: #fff5e0;
+  color: #8a5a06;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+}
+.pnl-revert:hover {
+  background: #ffeac1;
+}
+.pnl-grid[data-theme='dark'] .pnl-revert {
+  border-color: #7a5c17;
+  background: #33280f;
+  color: #f2cd7c;
+}
+.pnl-grid[data-theme='dark'] .pnl-revert:hover {
+  background: #45350f;
+}

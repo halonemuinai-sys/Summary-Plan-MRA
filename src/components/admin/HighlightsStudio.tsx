@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Save, RotateCcw, ExternalLink, Sparkles,
@@ -12,7 +12,7 @@ import { FinancialHighlightsData, FinancialRowData } from '@/lib/types';
 import { INITIAL_HIGHLIGHTS_DATA } from '@/lib/highlights-data';
 import { useEditHistory } from '@/lib/use-edit-history';
 import { formatBn, formatPct } from '@/lib/number-format';
-import { PNL_SOURCE_SLUG, PNL_SOURCE_TITLE, applyPnlSource } from '@/lib/highlights-from-pnl';
+import { PNL_SOURCE_SLUG, PNL_SOURCE_TITLE, applyPnlSource, pnlFigure } from '@/lib/highlights-from-pnl';
 import HighlightsMatrix from './HighlightsMatrix';
 import { EditHistoryButtons } from './EditToolbar';
 
@@ -34,6 +34,30 @@ function DerivedField({ label, text, isLightMode, tone }: { label: string; text:
     </div>
   );
 }
+
+/** The lines of each table. Kept out here so the grids are handed the same array on every render:
+ *  a new one makes them rebuild their columns and rows, and an edit made mid-rebuild is lost. */
+const REVENUE_ROWS = [{ field: 'value', label: 'Revenue' }];
+const PNL_ROWS = [
+  { field: 'gp', label: 'Gross Profit' },
+  { field: 'ebitda', label: 'EBITDA' },
+  { field: 'ebit', label: 'EBIT' },
+  { field: 'eat', label: 'Net Profit (EAT)' },
+];
+const MARGIN_ROWS = [
+  { field: 'gpm', label: 'Gross Profit Margin', unit: 'pct' as const },
+  { field: 'ebitdam', label: 'EBITDA Margin', unit: 'pct' as const },
+  { field: 'ebitm', label: 'Operating Margin', unit: 'pct' as const },
+  { field: 'eatm', label: 'Net Margin', unit: 'pct' as const },
+];
+const CASHFLOW_ROWS = [
+  { field: 'cfo', label: 'Operating (CFO)' },
+  { field: 'cfi', label: 'Investing (CFI)' },
+  { field: 'cff', label: 'Financing (CFF)' },
+];
+
+const PNL_LINES = ['gp', 'ebitda', 'ebit', 'eat'] as const;
+type PnlLine = (typeof PNL_LINES)[number];
 
 interface HighlightsStudioProps {
   isLightMode?: boolean;
@@ -153,11 +177,68 @@ export default function HighlightsStudio({ isLightMode = true }: HighlightsStudi
     }));
   };
 
-  // Revenue, Gross Profit, EBITDA, EBIT and Net Profit are lines of the P&L, and the margins follow
-  // from them, so the slide reads all of them off the P&L instead of keeping a copy that can drift.
-  // What is left to edit here is what the slide says about the figures, not the figures themselves.
-  const sourced = applyPnlSource(highlightsData, pnlItems);
+  // Revenue and the four profit lines are lines of the P&L, and the margins follow from them, so the
+  // slide reads them off the P&L rather than keeping a copy that can drift. A profit figure can still
+  // be typed over year by year; that figure is kept separately, so the table can show which of its
+  // numbers have left the P&L behind and put any of them back.
+  const sourced = useMemo(() => applyPnlSource(highlightsData, pnlItems), [highlightsData, pnlItems]);
   const margins = sourced.marginsTrajectory;
+
+  const overrides = highlightsData.pnlOverrides;
+  const isTyped = useCallback(
+    (field: string, year: string) => {
+      const typed = overrides?.[year]?.[field as PnlLine];
+      return typeof typed === 'number' && Number.isFinite(typed);
+    },
+    [overrides]
+  );
+  const cellSource = useCallback(
+    (field: string, year: string) => (isTyped(field, year) ? ('override' as const) : ('source' as const)),
+    [isTyped]
+  );
+  const typedLines = useMemo(
+    () => PNL_LINES.filter((line) => Object.values(overrides ?? {}).some((lines) => typeof lines[line] === 'number')) as string[],
+    [overrides]
+  );
+
+  const updatePnlPoint = useCallback((year: string, field: PnlLine, value: number) => {
+    rememberBeforeEdit();
+    setHighlightsData((prev) => {
+      const fromPnl = pnlFigure(pnlItems, field, year);
+      const forYear = { ...(prev.pnlOverrides?.[year] ?? {}) };
+      // Typing the figure the P&L already has puts the cell back under the P&L rather than pinning it
+      if (fromPnl !== null && Math.abs(fromPnl - value) < 0.005) delete forYear[field];
+      else forYear[field] = value;
+
+      const next = { ...(prev.pnlOverrides ?? {}) };
+      if (Object.keys(forYear).length === 0) delete next[year];
+      else next[year] = forYear;
+      return { ...prev, pnlOverrides: next };
+    });
+  }, [pnlItems]);
+
+  const revertPnlLine = useCallback((field: string) => {
+    rememberBeforeEdit();
+    setHighlightsData((prev) => {
+      const next: typeof prev.pnlOverrides = {};
+      for (const [year, lines] of Object.entries(prev.pnlOverrides ?? {})) {
+        const kept = { ...lines };
+        delete kept[field as PnlLine];
+        if (Object.keys(kept).length > 0) next[year] = kept;
+      }
+      return { ...prev, pnlOverrides: next };
+    });
+  }, []);
+
+  const revertAllPnl = useCallback(() => {
+    rememberBeforeEdit();
+    setHighlightsData((prev) => ({ ...prev, pnlOverrides: {} }));
+  }, []);
+
+  const onPnlEdit = useCallback(
+    (field: string, year: string, value: number) => updatePnlPoint(year, field as PnlLine, value),
+    [updatePnlPoint]
+  );
 
   const updateCashflowPoint = (
     year: string,
@@ -375,7 +456,7 @@ export default function HighlightsStudio({ isLightMode = true }: HighlightsStudi
           </div>
         </div>
         <HighlightsMatrix
-          rows={[{ field: 'value', label: 'Revenue' }]}
+          rows={REVENUE_ROWS}
           points={sourced.revenueTrajectory}
           caption="IDR Billion"
           isLightMode={isLightMode}
@@ -395,22 +476,35 @@ export default function HighlightsStudio({ isLightMode = true }: HighlightsStudi
               Gross Profit, EBITDA and Net Profit
             </h3>
             <p className="text-xs text-slate-400 mt-0.5">
-              The four bars shown for each year on the slide, read from {PNL_SOURCE_TITLE}: Gross Profit,
-              EBITDA after holding cost, Operating Profit (EBIT) and Net Profit After Tax. Edit them there.
+              The four bars shown for each year on the slide. They follow {PNL_SOURCE_TITLE} - Gross Profit,
+              EBITDA after holding cost, Operating Profit (EBIT) and Net Profit After Tax - until you type
+              over one. A figure you type is marked, and can be put back.
             </p>
           </div>
+          {typedLines.length > 0 && (
+            <button
+              onClick={revertAllPnl}
+              className={`flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-xl border transition-all cursor-pointer ${
+                isLightMode
+                  ? 'bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-300'
+                  : 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border-amber-500/30'
+              }`}
+              title={`Put every figure in this table back to ${PNL_SOURCE_TITLE}`}
+            >
+              <RotateCcw size={13} />
+              Take all from P&amp;L
+            </button>
+          )}
         </div>
         <HighlightsMatrix
-          rows={[
-            { field: 'gp', label: 'Gross Profit' },
-            { field: 'ebitda', label: 'EBITDA' },
-            { field: 'ebit', label: 'EBIT' },
-            { field: 'eat', label: 'Net Profit (EAT)' },
-          ]}
+          rows={PNL_ROWS}
           points={sourced.pnlTrajectory}
           caption="IDR Billion"
           isLightMode={isLightMode}
-          readOnly
+          onEdit={onPnlEdit}
+          cellSource={cellSource}
+          overriddenRows={typedLines}
+          onRevertRow={revertPnlLine}
           onUndo={onUndo}
           onRedo={onRedo}
         />
@@ -428,12 +522,7 @@ export default function HighlightsStudio({ isLightMode = true }: HighlightsStudi
           </div>
         </div>
         <HighlightsMatrix
-          rows={[
-            { field: 'gpm', label: 'Gross Profit Margin', unit: 'pct' },
-            { field: 'ebitdam', label: 'EBITDA Margin', unit: 'pct' },
-            { field: 'ebitm', label: 'Operating Margin', unit: 'pct' },
-            { field: 'eatm', label: 'Net Margin', unit: 'pct' },
-          ]}
+          rows={MARGIN_ROWS}
           points={margins}
           caption="Percent of revenue"
           isLightMode={isLightMode}
@@ -455,11 +544,7 @@ export default function HighlightsStudio({ isLightMode = true }: HighlightsStudi
           </div>
         </div>
         <HighlightsMatrix
-          rows={[
-            { field: 'cfo', label: 'Operating (CFO)' },
-            { field: 'cfi', label: 'Investing (CFI)' },
-            { field: 'cff', label: 'Financing (CFF)' },
-          ]}
+          rows={CASHFLOW_ROWS}
           points={highlightsData.cashflowTrajectory}
           caption="IDR Billion"
           isLightMode={isLightMode}

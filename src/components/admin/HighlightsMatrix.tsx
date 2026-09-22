@@ -8,7 +8,7 @@ import 'react-datasheet-grid/dist/style.css';
 import clsx from 'clsx';
 import { formatBn, formatPct } from '@/lib/number-format';
 import { YearField, yearField } from '@/lib/grid-fields';
-import { Lock } from 'lucide-react';
+import { Lock, RotateCcw } from 'lucide-react';
 import { LabelHeader, makeNumberColumn, useGridUndoKeys } from './grid-shared';
 
 const ROW_HEIGHT = 38;
@@ -43,18 +43,46 @@ interface HighlightsMatrixProps {
   onEdit?: (field: string, year: string, value: number) => void;
   /** Figures worked out from other tables: shown, never typed into */
   readOnly?: boolean;
+  /** For a table read off another one: whether a cell still follows it, or has been typed over */
+  cellSource?: (field: string, year: string) => 'source' | 'override';
+  /** Lines carrying a typed figure, so the label can offer to put them back */
+  overriddenRows?: string[];
+  /** Puts one line back to the figures it is read off */
+  onRevertRow?: (field: string) => void;
   /** When given, each year header carries a button that switches it between Actual and Forecast */
   onToggleForecast?: (year: string) => void;
   onUndo: () => void;
   onRedo: () => void;
 }
 
-function LabelCell({ rowData, columnData }: CellProps<MatrixGridRow, { readOnly?: boolean }>) {
+interface LabelColumnData {
+  readOnly?: boolean;
+  overridden?: string[];
+  onRevert?: (field: string) => void;
+}
+
+function LabelCell({ rowData, columnData }: CellProps<MatrixGridRow, LabelColumnData>) {
+  const overruled = columnData?.overridden?.includes(rowData.field) ?? false;
   return (
     <div className={clsx('pnl-label', columnData?.readOnly && 'pnl-label-derived')}>
       <span className="pnl-label-text">{rowData.label}</span>
       {rowData.unit === 'pct' && <span className="hl-unit">%</span>}
       {columnData?.readOnly && <Lock className="pnl-lock" size={11} aria-label="Worked out automatically" />}
+      {overruled && columnData?.onRevert && (
+        <button
+          type="button"
+          className="pnl-revert"
+          title="Put this line back to the figures in the P&L"
+          onMouseDown={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            event.stopPropagation();
+            columnData.onRevert?.(rowData.field);
+          }}
+        >
+          <RotateCcw size={10} />
+          Typed
+        </button>
+      )}
     </div>
   );
 }
@@ -68,6 +96,9 @@ export default function HighlightsMatrix({
   isLightMode,
   onEdit,
   readOnly = false,
+  cellSource,
+  overriddenRows,
+  onRevertRow,
   onToggleForecast,
   onUndo,
   onRedo,
@@ -121,15 +152,23 @@ export default function HighlightsMatrix({
               <AmountCell {...props} columnData={amount.columnData!} />
             ),
           disabled: readOnly,
-          cellClassName: () => (readOnly ? 'pnl-cell pnl-cell-derived' : 'pnl-cell pnl-cell-input'),
+          cellClassName: ({ rowData }: { rowData: MatrixGridRow }) => {
+            if (readOnly) return 'pnl-cell pnl-cell-derived';
+            const typed = cellSource?.(rowData.field, point.year) === 'override';
+            return clsx('pnl-cell pnl-cell-input', typed && 'pnl-cell-override');
+          },
         };
       }),
-    [points, onToggleForecast, readOnly]
+    [points, onToggleForecast, readOnly, cellSource]
   );
 
   const labelColumn = useMemo(
-    () => ({ ...LABEL_COLUMN_BASE, title: <LabelHeader title="Line" caption={caption} />, columnData: { readOnly } }),
-    [caption, readOnly]
+    () => ({
+      ...LABEL_COLUMN_BASE,
+      title: <LabelHeader title="Line" caption={caption} />,
+      columnData: { readOnly, overridden: overriddenRows, onRevert: onRevertRow },
+    }),
+    [caption, readOnly, overriddenRows, onRevertRow]
   );
 
   const rowsRef = useRef(gridRows);

@@ -2,6 +2,7 @@ import {
   FinancialHighlightsData,
   FinancialRowData,
   HighlightsKpis,
+  PnlOverrides,
   PnlTrajectoryPoint,
   RevenueTrajectoryPoint,
 } from './types';
@@ -15,6 +16,10 @@ import { deriveMargins } from './highlights-margins';
  *
  * Only the figures are read off the P&L. What the slide says about them - its title, the Actual/Forecast
  * marking of each year, the comparison wording on the KPI cards - stays with the slide.
+ *
+ * A figure can still be overruled by hand, year by year and line by line. Those figures are kept apart
+ * from the ones the P&L gives, so the slide can say which of its numbers have left the P&L behind and
+ * put any of them back.
  */
 
 /** Which P&L row each line of the slide is. "EBITDA" is the after-holding-cost line, as on the slide. */
@@ -59,6 +64,16 @@ function pnlValue(
   return typeof value === 'number' && Number.isFinite(value) ? round2(value) : null;
 }
 
+/** What the P&L says for one line of the slide in one of its years, or null when it does not carry it */
+export function pnlFigure(
+  items: Record<string, FinancialRowData> | undefined,
+  line: keyof typeof PNL_SOURCE_ROWS,
+  yearLabel: string
+): number | null {
+  if (!items) return null;
+  return pnlValue(items, PNL_SOURCE_ROWS[line], calendarYear(yearLabel));
+}
+
 /** Growth over the previous year, in %. Measured against the size of the previous figure, so a year
  *  that turned a loss into a profit reads as a rise rather than a fall. */
 function growthPct(current: number, previous: number): number {
@@ -73,7 +88,8 @@ function growthPct(current: number, previous: number): number {
 export function deriveTrajectories(
   revenueTrajectory: RevenueTrajectoryPoint[],
   pnlTrajectory: PnlTrajectoryPoint[],
-  items: Record<string, FinancialRowData>
+  items: Record<string, FinancialRowData>,
+  overrides?: PnlOverrides
 ): { revenueTrajectory: RevenueTrajectoryPoint[]; pnlTrajectory: PnlTrajectoryPoint[] } {
   const revenue = revenueTrajectory.map((point) => {
     const value = pnlValue(items, PNL_SOURCE_ROWS.revenue, calendarYear(point.year));
@@ -82,13 +98,18 @@ export function deriveTrajectories(
 
   const pnl = pnlTrajectory.map((point) => {
     const year = calendarYear(point.year);
-    const line = (key: string, current: number) => pnlValue(items, key, year) ?? current;
+    const typed = overrides?.[point.year] ?? {};
+    const line = (key: 'gp' | 'ebitda' | 'ebit' | 'eat', current: number) => {
+      const byHand = typed[key];
+      if (typeof byHand === 'number' && Number.isFinite(byHand)) return round2(byHand);
+      return pnlValue(items, PNL_SOURCE_ROWS[key], year) ?? current;
+    };
     return {
       year: point.year,
-      gp: line(PNL_SOURCE_ROWS.gp, point.gp),
-      ebitda: line(PNL_SOURCE_ROWS.ebitda, point.ebitda),
-      ebit: line(PNL_SOURCE_ROWS.ebit, point.ebit),
-      eat: line(PNL_SOURCE_ROWS.eat, point.eat),
+      gp: line('gp', point.gp),
+      ebitda: line('ebitda', point.ebitda),
+      ebit: line('ebit', point.ebit),
+      eat: line('eat', point.eat),
     };
   });
 
@@ -153,7 +174,8 @@ export function applyPnlSource(
   const { revenueTrajectory, pnlTrajectory } = deriveTrajectories(
     highlights.revenueTrajectory,
     highlights.pnlTrajectory,
-    items
+    items,
+    highlights.pnlOverrides
   );
 
   return {

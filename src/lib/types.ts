@@ -78,12 +78,22 @@ export interface CashflowTrajectoryPoint {
   cff: number;
 }
 
+/**
+ * Figures typed into the Highlights studio that stand in for what the P&L says. A year only appears
+ * here once someone has overruled it, so everything else keeps following the P&L on its own.
+ */
+export interface PnlOverrides {
+  [year: string]: Partial<Pick<PnlTrajectoryPoint, 'gp' | 'ebitda' | 'ebit' | 'eat'>>;
+}
+
 export interface FinancialHighlightsData {
   title: string;
   subtitle: string;
   kpis: HighlightsKpis;
   revenueTrajectory: RevenueTrajectoryPoint[];
   pnlTrajectory: PnlTrajectoryPoint[];
+  /** Years and lines where a typed figure overrules the P&L */
+  pnlOverrides?: PnlOverrides;
   marginsTrajectory: MarginsTrajectoryPoint[];
   cashflowTrajectory: CashflowTrajectoryPoint[];
   footerNote: string;
