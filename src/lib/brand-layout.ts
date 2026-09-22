@@ -28,15 +28,17 @@ const CATEGORY_BADGE: Partial<Record<BrandRowData['category'], BrandBadge>> = {
   retail_new: { label: 'New Retail', tone: 'retail' },
 };
 
-// The six existing brands make up the P&L division lines: Retail = Bulgari + Omega + L'OREAL + Wiggle Wiggle,
-// F&B = Haagendazs, Media = MRA Media - Publisher. Checked against the division rows of the P&L for 2026-2031.
+// The existing brands make up the P&L division lines: Retail = Bulgari + Omega + L'OREAL + Wiggle Wiggle,
+// F&B = Haagendazs, Media = Ads + Events + Digital. Checked against the division rows of the P&L for 2026-2031.
 const EXISTING_BRAND_DIVISION: Record<string, string> = {
   brand_97: 'Retail',
   brand_98: 'Retail',
   brand_99: 'Retail',
   brand_100: 'Retail',
   brand_101: 'Food & Beverages',
-  brand_102: 'Publisher Media',
+  brand_118: 'Publisher Media',
+  brand_119: 'Publisher Media',
+  brand_120: 'Publisher Media',
 };
 
 /**

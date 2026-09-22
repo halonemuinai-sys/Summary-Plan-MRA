@@ -16,7 +16,7 @@ export const revenueSeries = {
   segment: [['Retail', '#25303e'], ['F&B', '#ffa515'], ['Media', '#a8b0bb']],
   retail: [['Bulgari', '#25303e'], ['Omega', '#ffa515'], ["L’OREAL", '#ffda31'], ['Wiggle Wiggle', '#59a88c'], ['Chronologie', '#2a78d6'], ['Boucheron', '#4a3aa7'], ['New Business', '#f3b5e6']],
   fnb: [['Haagendazs', '#ffa515'], ['Jamba Juice', '#1baf7a'], ['Hard Rock Bali', '#25303e'], ['New Business', '#a8b0bb']],
-  media: [['Publisher', '#ffa515']],
+  media: [['Ads', '#25303e'], ['Events', '#ffa515'], ['Digital', '#2a78d6']],
 } as const;
 export type RevenuePanel = keyof typeof revenueSeries;
 export type RevenuePoint = { year: string; total: number } & Record<string, string | number>;
@@ -45,7 +45,10 @@ function group(row: BrandRowData): { panel: Exclude<RevenuePanel, 'segment'>; la
     brand_99: { panel: 'retail', label: 'L’OREAL' },
     brand_100: { panel: 'retail', label: 'Wiggle Wiggle' },
     brand_101: { panel: 'fnb', label: 'Haagendazs' },
-    brand_102: { panel: 'media', label: 'Publisher' },
+    // Media used to be one line called Publisher; it is now the three lines that make it up
+    brand_118: { panel: 'media', label: 'Ads' },
+    brand_119: { panel: 'media', label: 'Events' },
+    brand_120: { panel: 'media', label: 'Digital' },
     // Counted, never named: an acquisition belongs to New Business on this slide
     brand_103: { panel: 'retail', label: 'New Business' },
     brand_104: { panel: 'retail', label: 'New Business' },
