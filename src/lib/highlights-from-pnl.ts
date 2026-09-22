@@ -4,6 +4,7 @@ import {
   HighlightsKpis,
   PnlOverrides,
   PnlTrajectoryPoint,
+  RevenueOverrides,
   RevenueTrajectoryPoint,
 } from './types';
 import { deriveMargins } from './highlights-margins';
@@ -89,9 +90,12 @@ export function deriveTrajectories(
   revenueTrajectory: RevenueTrajectoryPoint[],
   pnlTrajectory: PnlTrajectoryPoint[],
   items: Record<string, FinancialRowData>,
-  overrides?: PnlOverrides
+  overrides?: PnlOverrides,
+  revenueOverrides?: RevenueOverrides
 ): { revenueTrajectory: RevenueTrajectoryPoint[]; pnlTrajectory: PnlTrajectoryPoint[] } {
   const revenue = revenueTrajectory.map((point) => {
+    const byHand = revenueOverrides?.[point.year];
+    if (typeof byHand === 'number' && Number.isFinite(byHand)) return { ...point, value: round2(byHand) };
     const value = pnlValue(items, PNL_SOURCE_ROWS.revenue, calendarYear(point.year));
     return value === null ? point : { ...point, value };
   });
@@ -175,7 +179,8 @@ export function applyPnlSource(
     highlights.revenueTrajectory,
     highlights.pnlTrajectory,
     items,
-    highlights.pnlOverrides
+    highlights.pnlOverrides,
+    highlights.revenueOverrides
   );
 
   return {

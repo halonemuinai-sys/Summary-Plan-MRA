@@ -230,6 +230,38 @@ export default function HighlightsStudio({ isLightMode = true }: HighlightsStudi
     });
   }, []);
 
+  const revenueOverrides = highlightsData.revenueOverrides;
+  const revenueCellSource = useCallback(
+    (_field: string, year: string) => {
+      const typed = revenueOverrides?.[year];
+      return typeof typed === 'number' && Number.isFinite(typed) ? ('override' as const) : ('source' as const);
+    },
+    [revenueOverrides]
+  );
+  const typedRevenueRows = useMemo(
+    () => (Object.values(revenueOverrides ?? {}).some((value) => typeof value === 'number') ? ['value'] : []),
+    [revenueOverrides]
+  );
+
+  const onRevenueEdit = useCallback(
+    (_field: string, year: string, value: number) => {
+      rememberBeforeEdit();
+      setHighlightsData((prev) => {
+        const fromPnl = pnlFigure(pnlItems, 'revenue', year);
+        const next = { ...(prev.revenueOverrides ?? {}) };
+        if (fromPnl !== null && Math.abs(fromPnl - value) < 0.005) delete next[year];
+        else next[year] = value;
+        return { ...prev, revenueOverrides: next };
+      });
+    },
+    [pnlItems]
+  );
+
+  const revertAllRevenue = useCallback(() => {
+    rememberBeforeEdit();
+    setHighlightsData((prev) => ({ ...prev, revenueOverrides: {} }));
+  }, []);
+
   const revertAllPnl = useCallback(() => {
     rememberBeforeEdit();
     setHighlightsData((prev) => ({ ...prev, pnlOverrides: {} }));
@@ -450,17 +482,35 @@ export default function HighlightsStudio({ isLightMode = true }: HighlightsStudi
               Revenue Trajectory
             </h3>
             <p className="text-xs text-slate-400 mt-0.5">
-              Total Revenue (Net) read from {PNL_SOURCE_TITLE}. Edit a year there and it moves here.
-              What you set here is which years are drawn solid (Actual) and which hatched (Forecast).
+              Total Revenue (Net). It follows {PNL_SOURCE_TITLE} until you type over a year, and a figure
+              you type is marked and can be put back. The Actual / Forecast tag on each year is yours: it
+              decides whether the bar is drawn solid or hatched.
             </p>
           </div>
+          {typedRevenueRows.length > 0 && (
+            <button
+              onClick={revertAllRevenue}
+              className={`flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-xl border transition-all cursor-pointer ${
+                isLightMode
+                  ? 'bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-300'
+                  : 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border-amber-500/30'
+              }`}
+              title={`Put every year in this table back to ${PNL_SOURCE_TITLE}`}
+            >
+              <RotateCcw size={13} />
+              Take all from P&amp;L
+            </button>
+          )}
         </div>
         <HighlightsMatrix
           rows={REVENUE_ROWS}
           points={sourced.revenueTrajectory}
           caption="IDR Billion"
           isLightMode={isLightMode}
-          readOnly
+          onEdit={onRevenueEdit}
+          cellSource={revenueCellSource}
+          overriddenRows={typedRevenueRows}
+          onRevertRow={revertAllRevenue}
           onToggleForecast={toggleRevenueForecast}
           onUndo={onUndo}
           onRedo={onRedo}

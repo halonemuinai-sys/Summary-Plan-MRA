@@ -86,6 +86,11 @@ export interface PnlOverrides {
   [year: string]: Partial<Pick<PnlTrajectoryPoint, 'gp' | 'ebitda' | 'ebit' | 'eat'>>;
 }
 
+/** Revenue figures typed into the Highlights studio that stand in for what the P&L says, by year */
+export interface RevenueOverrides {
+  [year: string]: number;
+}
+
 export interface FinancialHighlightsData {
   title: string;
   subtitle: string;
@@ -94,6 +99,7 @@ export interface FinancialHighlightsData {
   pnlTrajectory: PnlTrajectoryPoint[];
   /** Years and lines where a typed figure overrules the P&L */
   pnlOverrides?: PnlOverrides;
+  revenueOverrides?: RevenueOverrides;
   marginsTrajectory: MarginsTrajectoryPoint[];
   cashflowTrajectory: CashflowTrajectoryPoint[];
   footerNote: string;
