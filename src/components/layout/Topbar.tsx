@@ -13,6 +13,8 @@ interface TopbarProps {
   setActiveScenarioSlug: (slug: string) => void;
   scenariosList: ScenarioDataset[];
   onSaveCurrent: () => void;
+  /** Whether anything on the page is waiting to be saved, so the button can say so */
+  hasUnsaved?: boolean;
   isSaving: boolean;
   copiedLink: boolean;
   onCopyLink: () => void;
@@ -27,6 +29,7 @@ export default function Topbar({
   setActiveScenarioSlug,
   scenariosList,
   onSaveCurrent,
+  hasUnsaved = false,
   isSaving,
   copiedLink,
   onCopyLink,
@@ -97,16 +100,19 @@ export default function Topbar({
           Reset
         </button>
 
-        {/* Quick Save Button */}
+        {/* Quick Save Button: saves every tab that has something waiting */}
         <button
           onClick={onSaveCurrent}
-          disabled={isSaving}
-          aria-label="Save scenario changes"
-          data-tooltip="Simpan perubahan skenario aktif"
-          className="ui-tooltip flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-blue-600 px-3.5 py-2.5 text-xs font-semibold text-white shadow-sm shadow-blue-600/20 transition-all hover:bg-blue-500 active:scale-95 disabled:opacity-50"
+          disabled={isSaving || !hasUnsaved}
+          aria-label={hasUnsaved ? 'Save unsaved changes' : 'Everything is saved'}
+          data-tooltip={hasUnsaved ? 'Simpan semua perubahan yang belum tersimpan' : 'Semua sudah tersimpan'}
+          className="ui-tooltip relative flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-blue-600 px-3.5 py-2.5 text-xs font-semibold text-white shadow-sm shadow-blue-600/20 transition-all hover:bg-blue-500 active:scale-95 disabled:opacity-50"
         >
           <Save size={13} />
-          {isSaving ? 'Saving…' : 'Save'}
+          {isSaving ? 'Saving…' : hasUnsaved ? 'Save' : 'Saved'}
+          {hasUnsaved && !isSaving && (
+            <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-amber-400 ring-2 ring-white dark:ring-slate-900" />
+          )}
         </button>
 
         {/* Copy Link Button */}

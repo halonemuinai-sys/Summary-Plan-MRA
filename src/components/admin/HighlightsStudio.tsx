@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import {
   Save, RotateCcw, ExternalLink, Sparkles,
   BarChart3, Coins, TrendingUp, Percent, FileText,
-  DollarSign, Activity, Check, Lock
+  DollarSign, Activity, Check, Lock, LockOpen
 } from 'lucide-react';
 import SaveNotification from '@/components/admin/SaveNotification';
 import { FinancialHighlightsData, FinancialRowData } from '@/lib/types';
@@ -14,7 +14,31 @@ import { useEditHistory } from '@/lib/use-edit-history';
 import { formatBn, formatPct } from '@/lib/number-format';
 import { PNL_SOURCE_SLUG, PNL_SOURCE_TITLE, applyPnlSource, pnlFigure } from '@/lib/highlights-from-pnl';
 import HighlightsMatrix from './HighlightsMatrix';
-import { EditHistoryButtons } from './EditToolbar';
+import { EditHistoryButtons, UnsavedBadge } from './EditToolbar';
+
+/** The lock on a table of figures: closed means the figures cannot be typed over by accident. */
+function LockToggle({ open, onToggle, isLightMode }: { open: boolean; onToggle: () => void; isLightMode: boolean }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-pressed={open}
+      title={open ? 'Lock these figures so they cannot be changed by accident' : 'Unlock to type over these figures'}
+      className={`flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-xl border transition-all cursor-pointer ${
+        open
+          ? isLightMode
+            ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-300'
+            : 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+          : isLightMode
+            ? 'bg-slate-100 hover:bg-slate-200 text-slate-600 border-slate-300'
+            : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
+      }`}
+    >
+      {open ? <LockOpen size={13} /> : <Lock size={13} />}
+      {open ? 'Editing - lock when done' : 'Locked'}
+    </button>
+  );
+}
 
 /** A figure the slide reads off the P&L: shown the way it will appear, never typed into. */
 function DerivedField({ label, text, isLightMode, tone }: { label: string; text: string; isLightMode: boolean; tone?: 'growth' }) {
@@ -61,9 +85,13 @@ type PnlLine = (typeof PNL_LINES)[number];
 
 interface HighlightsStudioProps {
   isLightMode?: boolean;
+  /** Told whenever there are edits here that have not been saved, so the page can say so */
+  onDirtyChange?: (dirty: boolean) => void;
+  /** Handed this studio's save, so the Save button in the top bar can reach it */
+  saveRef?: React.MutableRefObject<(() => Promise<boolean>) | null>;
 }
 
-export default function HighlightsStudio({ isLightMode = true }: HighlightsStudioProps) {
+export default function HighlightsStudio({ isLightMode = true, onDirtyChange, saveRef }: HighlightsStudioProps) {
   const router = useRouter();
   const [highlightsData, setHighlightsData] = useState<FinancialHighlightsData>(INITIAL_HIGHLIGHTS_DATA);
   const [isSaving, setIsSaving] = useState(false);
@@ -78,11 +106,21 @@ export default function HighlightsStudio({ isLightMode = true }: HighlightsStudi
   const [loading, setLoading] = useState(true);
   // The P&L the slide is drawn from, so the figures shown here are the ones the slide will show
   const [pnlItems, setPnlItems] = useState<Record<string, FinancialRowData>>();
+  // What was last loaded or saved. Anything else on screen is an edit nobody has kept yet.
+  const [saved, setSaved] = useState<string>();
+  /**
+   * The two tables of figures start locked. A figure typed here is a decision someone made against
+   * what the P&L says, and an open grid is one stray keystroke away from losing it. Unlocking is a
+   * deliberate act, and a save locks them again.
+   */
+  const [editing, setEditing] = useState({ revenue: false, pnl: false });
 
   // Undo/redo for the figures typed into the grids. Plain text fields keep the browser's own undo.
   const { push, undo, redo, clear: clearHistory, canUndo, canRedo } = useEditHistory<FinancialHighlightsData>();
   const dataRef = useRef(highlightsData);
   dataRef.current = highlightsData;
+  // What a save would send. Kept in a ref so the save can be handed out without being rebuilt.
+  const sourcedRef = useRef<FinancialHighlightsData>(INITIAL_HIGHLIGHTS_DATA);
   const rememberBeforeEdit = () => push(dataRef.current);
   const onUndo = useCallback(() => {
     const previous = undo(dataRef.current);
@@ -106,6 +144,7 @@ export default function HighlightsStudio({ isLightMode = true }: HighlightsStudi
           const json = await highlights.json();
           if (json.data) {
             setHighlightsData(json.data);
+            setSaved(JSON.stringify(json.data));
             clearHistory();
           }
         }
@@ -122,29 +161,35 @@ export default function HighlightsStudio({ isLightMode = true }: HighlightsStudi
     load();
   }, []);
 
-  // Save to PostgreSQL
-  const handleSave = async () => {
+  // Save to PostgreSQL. Returns whether it went through, so the Save button in the top bar can hold
+  // its "saved" message back when it did not.
+  const handleSave = useCallback(async () => {
     setSaveSuccess(false);
     setIsSaving(true);
     try {
+      const body = sourcedRef.current;
       const res = await fetch('/api/highlights', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(sourced),
+        body: JSON.stringify(body),
       });
 
-      if (res.ok) {
-        setSaveSuccess(true);
-      } else {
+      if (!res.ok) {
         alert('Failed to save to database');
+        return false;
       }
+      setSaveSuccess(true);
+      setSaved(JSON.stringify(dataRef.current));
+      setEditing({ revenue: false, pnl: false });
+      return true;
     } catch (e) {
       console.error('Error saving highlights:', e);
       alert('Error saving highlights');
+      return false;
     } finally {
       setIsSaving(false);
     }
-  };
+  }, []);
 
   const handleReset = () => {
     if (confirm('Put the slide wording and the Actual/Forecast marking back to the baseline? The figures stay as they are in the P&L.')) {
@@ -182,6 +227,16 @@ export default function HighlightsStudio({ isLightMode = true }: HighlightsStudi
   // be typed over year by year; that figure is kept separately, so the table can show which of its
   // numbers have left the P&L behind and put any of them back.
   const sourced = useMemo(() => applyPnlSource(highlightsData, pnlItems), [highlightsData, pnlItems]);
+  sourcedRef.current = sourced;
+
+  // Edits nobody has kept yet, and a way for the page around this studio to save them
+  const dirty = saved !== undefined && JSON.stringify(highlightsData) !== saved;
+  useEffect(() => { onDirtyChange?.(dirty); }, [dirty, onDirtyChange]);
+  useEffect(() => {
+    if (!saveRef) return;
+    saveRef.current = handleSave;
+    return () => { saveRef.current = null; };
+  }, [saveRef, handleSave]);
   const margins = sourced.marginsTrajectory;
 
   const overrides = highlightsData.pnlOverrides;
@@ -309,9 +364,12 @@ export default function HighlightsStudio({ isLightMode = true }: HighlightsStudi
                 <Sparkles size={18} />
               </div>
               <div>
-                <h2 className={`text-base font-bold ${isLightMode ? 'text-slate-900' : 'text-white'}`}>
-                  Financial Highlights Deck Studio
-                </h2>
+                <div className="flex items-center gap-2">
+                  <h2 className={`text-base font-bold ${isLightMode ? 'text-slate-900' : 'text-white'}`}>
+                    Financial Highlights Deck Studio
+                  </h2>
+                  {dirty && <UnsavedBadge isLightMode={isLightMode} />}
+                </div>
                 <p className="text-xs text-slate-400">
                   The figures come from {PNL_SOURCE_TITLE}. Here you set what the slide says about them.
                 </p>
@@ -487,30 +545,38 @@ export default function HighlightsStudio({ isLightMode = true }: HighlightsStudi
               decides whether the bar is drawn solid or hatched.
             </p>
           </div>
-          {typedRevenueRows.length > 0 && (
-            <button
-              onClick={revertAllRevenue}
-              className={`flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-xl border transition-all cursor-pointer ${
-                isLightMode
-                  ? 'bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-300'
-                  : 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border-amber-500/30'
-              }`}
-              title={`Put every year in this table back to ${PNL_SOURCE_TITLE}`}
-            >
-              <RotateCcw size={13} />
-              Take all from P&amp;L
-            </button>
-          )}
+          <div className="flex items-center gap-2">
+            {editing.revenue && typedRevenueRows.length > 0 && (
+              <button
+                onClick={revertAllRevenue}
+                className={`flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-xl border transition-all cursor-pointer ${
+                  isLightMode
+                    ? 'bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-300'
+                    : 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border-amber-500/30'
+                }`}
+                title={`Put every year in this table back to ${PNL_SOURCE_TITLE}`}
+              >
+                <RotateCcw size={13} />
+                Take all from P&amp;L
+              </button>
+            )}
+            <LockToggle
+              open={editing.revenue}
+              onToggle={() => setEditing((prev) => ({ ...prev, revenue: !prev.revenue }))}
+              isLightMode={isLightMode}
+            />
+          </div>
         </div>
         <HighlightsMatrix
           rows={REVENUE_ROWS}
           points={sourced.revenueTrajectory}
           caption="IDR Billion"
           isLightMode={isLightMode}
+          locked={!editing.revenue}
           onEdit={onRevenueEdit}
           cellSource={revenueCellSource}
           overriddenRows={typedRevenueRows}
-          onRevertRow={revertAllRevenue}
+          onRevertRow={editing.revenue ? revertAllRevenue : undefined}
           onToggleForecast={toggleRevenueForecast}
           onUndo={onUndo}
           onRedo={onRedo}
@@ -531,30 +597,38 @@ export default function HighlightsStudio({ isLightMode = true }: HighlightsStudi
               over one. A figure you type is marked, and can be put back.
             </p>
           </div>
-          {typedLines.length > 0 && (
-            <button
-              onClick={revertAllPnl}
-              className={`flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-xl border transition-all cursor-pointer ${
-                isLightMode
-                  ? 'bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-300'
-                  : 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border-amber-500/30'
-              }`}
-              title={`Put every figure in this table back to ${PNL_SOURCE_TITLE}`}
-            >
-              <RotateCcw size={13} />
-              Take all from P&amp;L
-            </button>
-          )}
+          <div className="flex items-center gap-2">
+            {editing.pnl && typedLines.length > 0 && (
+              <button
+                onClick={revertAllPnl}
+                className={`flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-xl border transition-all cursor-pointer ${
+                  isLightMode
+                    ? 'bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-300'
+                    : 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border-amber-500/30'
+                }`}
+                title={`Put every figure in this table back to ${PNL_SOURCE_TITLE}`}
+              >
+                <RotateCcw size={13} />
+                Take all from P&amp;L
+              </button>
+            )}
+            <LockToggle
+              open={editing.pnl}
+              onToggle={() => setEditing((prev) => ({ ...prev, pnl: !prev.pnl }))}
+              isLightMode={isLightMode}
+            />
+          </div>
         </div>
         <HighlightsMatrix
           rows={PNL_ROWS}
           points={sourced.pnlTrajectory}
           caption="IDR Billion"
           isLightMode={isLightMode}
+          locked={!editing.pnl}
           onEdit={onPnlEdit}
           cellSource={cellSource}
           overriddenRows={typedLines}
-          onRevertRow={revertPnlLine}
+          onRevertRow={editing.pnl ? revertPnlLine : undefined}
           onUndo={onUndo}
           onRedo={onRedo}
         />

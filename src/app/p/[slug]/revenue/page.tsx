@@ -8,7 +8,7 @@ import { BarChart, Bar, CartesianGrid, LabelList, ResponsiveContainer, Tooltip, 
 import { ArrowLeft, Layers, ShoppingBag, UtensilsCrossed, Radio, Maximize2, Printer } from 'lucide-react';
 import { useDeckExport } from '@/components/DeckExportContext';
 import { ScenarioDataset } from '@/lib/types';
-import { buildRevenueBreakdown, revenuePercentage, revenueSeries, RevenuePanel, RevenuePoint } from '@/lib/revenue-breakdown';
+import { buildRevenueBreakdown, panelSeries, revenuePercentage, revenueSeries, RevenuePanel, RevenuePoint } from '@/lib/revenue-breakdown';
 
 const titles = { segment: 'Revenue Breakdown per Segment', retail: 'Revenue Breakdown: Retail', fnb: 'Revenue Breakdown: F&B', media: 'Revenue Breakdown: Media' };
 const icons = { segment: Layers, retail: ShoppingBag, fnb: UtensilsCrossed, media: Radio };
@@ -75,7 +75,8 @@ function RevenueChart({ panel, rows, multiplier, unit, percentage }: { panel: Re
     else setFocus(null); // a click on the empty part of the chart lets everyone back in
   };
   const Icon = icons[panel];
-  const series = revenueSeries[panel];
+  // Only the brands earning something in the years on screen get a segment and a place in the legend
+  const series = panelSeries(panel, rows);
   const data = percentage ? revenuePercentage(rows) : rows.map(row => Object.fromEntries(Object.entries(row).map(([k, v]) => [k, typeof v === 'number' ? v * multiplier : v])));
   const display = (v: number) => percentage ? `${v.toLocaleString('en-US', { maximumFractionDigits: 1 })}%` : format(v);
   return <section className="revenue-card rounded-2xl border border-white bg-white/90 p-5 shadow-[0_4px_30px_#dce6ed30] min-w-0">

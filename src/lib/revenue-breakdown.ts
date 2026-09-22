@@ -1,13 +1,34 @@
 import { BrandRowData } from './types';
 
+/**
+ * Every series a panel can draw, in stacking order, with the colour that belongs to that brand.
+ * The named brands come first and New Business last, so the bar reads from the business that exists
+ * today up to the one still being built.
+ *
+ * A brand keeps its colour whether or not it is on screen: `panelSeries` only decides what is drawn,
+ * it never hands a colour to a different brand. Chronologie's blue and Boucheron's violet were checked
+ * against the colours they sit next to - colour-blind and normal-vision separation both clear the gates.
+ *
+ * Atmos and Metrox are deliberately not here. They are acquisitions rather than brands the slide names,
+ * so whatever they earn is counted inside New Business; they never get a segment of their own.
+ */
 export const revenueSeries = {
   segment: [['Retail', '#25303e'], ['F&B', '#ffa515'], ['Media', '#a8b0bb']],
-  retail: [['Bulgari', '#25303e'], ['Omega', '#ffa515'], ["L’OREAL", '#ffda31'], ['Wiggle Wiggle', '#59a88c'], ['Atmos', '#f44336'], ['Metrox', '#b7aaa2'], ['New Business', '#f3b5e6']],
-  fnb: [['Haagendazs', '#ffa515'], ['New Business', '#a8b0bb'], ['Hard Rock Bali', '#25303e']],
+  retail: [['Bulgari', '#25303e'], ['Omega', '#ffa515'], ["L’OREAL", '#ffda31'], ['Wiggle Wiggle', '#59a88c'], ['Chronologie', '#2a78d6'], ['Boucheron', '#4a3aa7'], ['New Business', '#f3b5e6']],
+  fnb: [['Haagendazs', '#ffa515'], ['Jamba Juice', '#1baf7a'], ['Hard Rock Bali', '#25303e'], ['New Business', '#a8b0bb']],
   media: [['Publisher', '#ffa515']],
 } as const;
 export type RevenuePanel = keyof typeof revenueSeries;
 export type RevenuePoint = { year: string; total: number } & Record<string, string | number>;
+
+/**
+ * The series a panel actually draws: the ones carrying revenue in at least one year on screen. A brand
+ * planned but not yet earning - the new Hard Rock in Bali, say - would otherwise take a colour and a
+ * place in the legend for a segment nobody can see.
+ */
+export function panelSeries(panel: RevenuePanel, rows: RevenuePoint[]): ReadonlyArray<readonly [string, string]> {
+  return revenueSeries[panel].filter(([name]) => rows.some((row) => Math.abs(Number(row[name]) || 0) > 0.005));
+}
 
 /** Share of each panel's annual total; a zero-total year has no percentage mix. */
 export function revenuePercentage(rows: RevenuePoint[]): RevenuePoint[] {
@@ -25,9 +46,14 @@ function group(row: BrandRowData): { panel: Exclude<RevenuePanel, 'segment'>; la
     brand_100: { panel: 'retail', label: 'Wiggle Wiggle' },
     brand_101: { panel: 'fnb', label: 'Haagendazs' },
     brand_102: { panel: 'media', label: 'Publisher' },
-    brand_103: { panel: 'retail', label: 'Atmos' },
-    brand_104: { panel: 'retail', label: 'Metrox' },
+    // Counted, never named: an acquisition belongs to New Business on this slide
+    brand_103: { panel: 'retail', label: 'New Business' },
+    brand_104: { panel: 'retail', label: 'New Business' },
+    // Broken out of New Business: these three carry enough of the plan to be named on the slide
+    brand_106: { panel: 'fnb', label: 'Jamba Juice' },
     brand_109: { panel: 'fnb', label: 'Hard Rock Bali' },
+    brand_111: { panel: 'retail', label: 'Chronologie' },
+    brand_112: { panel: 'retail', label: 'Boucheron' },
   };
   return known[row.id] ?? (row.category === 'retail_new' ? { panel: 'retail', label: 'New Business' }
     : row.category === 'fnb_new' ? { panel: 'fnb', label: 'New Business' } : null);

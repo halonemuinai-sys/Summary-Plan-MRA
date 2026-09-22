@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Save, PlusCircle, ExternalLink, Copy, Check,
@@ -48,6 +48,10 @@ export default function AdminPage() {
   const [copiedLink, setCopiedLink] = useState(false);
   const [scenariosList, setScenariosList] = useState<ScenarioDataset[]>([INITIAL_DATASET]);
   const [isDirty, setIsDirty] = useState(false);
+  // The Highlights studio keeps its own figures, so it reports whether it has anything unsaved and
+  // hands over its save. That way one Save button can keep every tab up to date.
+  const [highlightsDirty, setHighlightsDirty] = useState(false);
+  const saveHighlightsRef = useRef<(() => Promise<boolean>) | null>(null);
   // The grids measure themselves against the browser window, so they are rendered once the page is up
   const [hasMounted, setHasMounted] = useState(false);
   const [origin, setOrigin] = useState('');
@@ -213,6 +217,16 @@ export default function AdminPage() {
     }
   };
 
+  /**
+   * The Save button in the top bar saves everything that is waiting: the scenario behind the P&L and
+   * brand grids, and the Highlights studio. Two Save buttons that each covered half of the screen left
+   * people pressing the nearer one and losing the other half.
+   */
+  const handleSaveEverything = async () => {
+    if (isDirty) await handleUpdateCurrent();
+    if (highlightsDirty) await saveHighlightsRef.current?.();
+  };
+
   const handleCopyLink = () => {
     const path = activeTab === 'grid'
       ? `/p/${activeScenarioSlug}`
@@ -301,7 +315,8 @@ export default function AdminPage() {
             if (sel) loadIntoEditor(sel);
           }}
           scenariosList={scenariosList}
-          onSaveCurrent={handleUpdateCurrent}
+          onSaveCurrent={handleSaveEverything}
+          hasUnsaved={isDirty || highlightsDirty}
           isSaving={isSaving}
           copiedLink={copiedLink}
           onCopyLink={handleCopyLink}
@@ -700,9 +715,14 @@ export default function AdminPage() {
           )}
 
           {/* TAB 4: FINANCIAL HIGHLIGHTS STUDIO */}
-          {activeTab === 'highlights' && (
-            <HighlightsStudio isLightMode={isLightMode} />
-          )}
+          {/* Kept mounted: unmounting it on a tab change threw away any figure typed here */}
+          <div className={activeTab === 'highlights' ? undefined : 'hidden'}>
+            <HighlightsStudio
+              isLightMode={isLightMode}
+              onDirtyChange={setHighlightsDirty}
+              saveRef={saveHighlightsRef}
+            />
+          </div>
 
         </div>
 

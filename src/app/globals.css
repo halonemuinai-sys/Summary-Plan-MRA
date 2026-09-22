@@ -987,3 +987,13 @@ body {
 .pnl-grid[data-theme='dark'] .pnl-revert:hover {
   background: #45350f;
 }
+
+/* A table of figures that is locked: the cells keep the look they had, including the mark on a typed
+   figure, but nothing about them invites typing. */
+.pnl-grid .dsg-cell.pnl-cell-locked,
+.pnl-grid .dsg-cell.pnl-cell-locked .dsg-input {
+  cursor: default;
+}
+.pnl-revert.is-static {
+  cursor: default;
+}

@@ -43,6 +43,8 @@ interface HighlightsMatrixProps {
   onEdit?: (field: string, year: string, value: number) => void;
   /** Figures worked out from other tables: shown, never typed into */
   readOnly?: boolean;
+  /** An editable table that is protected for now: it keeps its look but takes no typing */
+  locked?: boolean;
   /** For a table read off another one: whether a cell still follows it, or has been typed over */
   cellSource?: (field: string, year: string) => 'source' | 'override';
   /** Lines carrying a typed figure, so the label can offer to put them back */
@@ -68,7 +70,8 @@ function LabelCell({ rowData, columnData }: CellProps<MatrixGridRow, LabelColumn
       <span className="pnl-label-text">{rowData.label}</span>
       {rowData.unit === 'pct' && <span className="hl-unit">%</span>}
       {columnData?.readOnly && <Lock className="pnl-lock" size={11} aria-label="Worked out automatically" />}
-      {overruled && columnData?.onRevert && (
+      {/* While the table is unlocked the mark is the way back; while it is locked it is only a mark */}
+      {overruled && (columnData?.onRevert ? (
         <button
           type="button"
           className="pnl-revert"
@@ -82,7 +85,11 @@ function LabelCell({ rowData, columnData }: CellProps<MatrixGridRow, LabelColumn
           <RotateCcw size={10} />
           Typed
         </button>
-      )}
+      ) : (
+        <span className="pnl-revert is-static" title="Typed over the figure in the P&L">
+          Typed
+        </span>
+      ))}
     </div>
   );
 }
@@ -96,6 +103,7 @@ export default function HighlightsMatrix({
   isLightMode,
   onEdit,
   readOnly = false,
+  locked = false,
   cellSource,
   overriddenRows,
   onRevertRow,
@@ -151,15 +159,16 @@ export default function HighlightsMatrix({
             ) : (
               <AmountCell {...props} columnData={amount.columnData!} />
             ),
-          disabled: readOnly,
+          disabled: readOnly || locked,
           cellClassName: ({ rowData }: { rowData: MatrixGridRow }) => {
             if (readOnly) return 'pnl-cell pnl-cell-derived';
             const typed = cellSource?.(rowData.field, point.year) === 'override';
-            return clsx('pnl-cell pnl-cell-input', typed && 'pnl-cell-override');
+            // A locked cell keeps the look it had, so a typed figure is still marked as one
+            return clsx('pnl-cell pnl-cell-input', typed && 'pnl-cell-override', locked && 'pnl-cell-locked');
           },
         };
       }),
-    [points, onToggleForecast, readOnly, cellSource]
+    [points, onToggleForecast, readOnly, locked, cellSource]
   );
 
   const labelColumn = useMemo(
@@ -181,7 +190,7 @@ export default function HighlightsMatrix({
   // Typing, pasting from Excel, the fill handle and Delete all arrive as a fresh copy of the rows
   const handleChange = useCallback(
     (next: MatrixGridRow[]) => {
-      if (readOnly) return;
+      if (readOnly || locked) return;
       const previous = rowsRef.current;
       next.forEach((row, index) => {
         const before = previous[index];
@@ -199,7 +208,7 @@ export default function HighlightsMatrix({
         }
       });
     },
-    [points, readOnly]
+    [points, readOnly, locked]
   );
 
   return (
